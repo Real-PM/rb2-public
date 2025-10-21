@@ -1,0 +1,476 @@
+-- Statistics Tables
+-- Matching OOTP CSV export files exactly
+
+-- Players career batting stats (from players_career_batting_stats.csv)
+CREATE TABLE IF NOT EXISTS players_career_batting_stats (
+    player_id INTEGER,
+    year SMALLINT,
+    team_id INTEGER,
+    game_id INTEGER,
+    league_id INTEGER,
+    level_id SMALLINT,
+    split_id SMALLINT,
+    position SMALLINT,
+    ab SMALLINT,
+    h SMALLINT,
+    k SMALLINT,
+    pa SMALLINT,
+    pitches_seen SMALLINT,
+    g SMALLINT,
+    gs SMALLINT,
+    d SMALLINT,
+    t SMALLINT,
+    hr SMALLINT,
+    r SMALLINT,
+    rbi SMALLINT,
+    sb SMALLINT,
+    cs SMALLINT,
+    bb SMALLINT,
+    ibb SMALLINT,
+    gdp SMALLINT,
+    sh SMALLINT,
+    sf SMALLINT,
+    hp SMALLINT,
+    ci SMALLINT,
+    wpa DECIMAL(8,3),
+    stint SMALLINT,
+    ubr DECIMAL(8,3),
+    war DECIMAL(8,3),
+    sub_league_id INTEGER,
+    -- Pre-calculated advanced stats (computed during ETL)
+    batting_average DECIMAL(4,3),
+    on_base_percentage DECIMAL(4,3),
+    slugging_percentage DECIMAL(4,3),
+    ops DECIMAL(4,3),
+    iso DECIMAL(4,3),
+    babip DECIMAL(4,3),
+    woba DECIMAL(4,3),
+    wrc INTEGER,
+    wrc_plus INTEGER,
+    PRIMARY KEY (player_id, year, team_id, split_id, stint),
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id),
+    FOREIGN KEY (team_id) REFERENCES teams(team_id),
+    FOREIGN KEY (league_id) REFERENCES leagues(league_id)
+);
+ALTER TABLE players_career_batting_stats
+ADD COLUMN IF NOT EXISTS sub_league_id INTEGER,
+ADD COLUMN IF NOT EXISTS constants_version INTEGER,
+ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN IF NOT EXISTS wraa DECIMAL(6,1);
+
+-- Players career pitching stats (from players_career_pitching_stats.csv)
+CREATE TABLE IF NOT EXISTS players_career_pitching_stats (
+    player_id INTEGER,
+    year SMALLINT,
+    team_id INTEGER,
+    game_id INTEGER,
+    league_id INTEGER,
+    level_id SMALLINT,
+    split_id SMALLINT,
+    ip SMALLINT,
+    ab SMALLINT,
+    tb SMALLINT,
+    ha SMALLINT,
+    k SMALLINT,
+    bf SMALLINT,
+    rs SMALLINT,
+    bb SMALLINT,
+    r SMALLINT,
+    er SMALLINT,
+    gb SMALLINT,
+    fb SMALLINT,
+    pi SMALLINT,
+    ipf SMALLINT,
+    g SMALLINT,
+    gs SMALLINT,
+    w SMALLINT,
+    l SMALLINT,
+    s SMALLINT,
+    sa SMALLINT,
+    da SMALLINT,
+    sh SMALLINT,
+    sf SMALLINT,
+    ta SMALLINT,
+    hra SMALLINT,
+    bk SMALLINT,
+    ci SMALLINT,
+    iw SMALLINT,
+    wp SMALLINT,
+    hp SMALLINT,
+    gf SMALLINT,
+    dp SMALLINT,
+    qs SMALLINT,
+    svo SMALLINT,
+    bs SMALLINT,
+    ra SMALLINT,
+    cg SMALLINT,
+    sho SMALLINT,
+    sb SMALLINT,
+    cs SMALLINT,
+    hld SMALLINT,
+    ir DECIMAL(8,3),
+    irs DECIMAL(8,3),
+    wpa DECIMAL(8,3),
+    li DECIMAL(8,3),
+    stint SMALLINT,
+    outs SMALLINT,
+    war DECIMAL(8,3),
+    sub_league_id SMALLINT,
+    -- Pre-calculated advanced stats (computed during ETL)
+    era DECIMAL(5,2),
+    whip DECIMAL(4,2),
+    k9 DECIMAL(4,1),
+    bb9 DECIMAL(4,1),
+    hr9 DECIMAL(4,1),
+    h9 DECIMAL(4,1),
+    fip DECIMAL(5,2),
+    babip DECIMAL(4,3),
+    era_plus INTEGER,
+    fip_plus INTEGER,
+    PRIMARY KEY (player_id, year, team_id, split_id, stint),
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id),
+    FOREIGN KEY (team_id) REFERENCES teams(team_id),
+    FOREIGN KEY (league_id) REFERENCES leagues(league_id)
+);
+ALTER TABLE players_career_pitching_stats
+ADD COLUMN IF NOT EXISTS sub_league_id INTEGER,
+ADD COLUMN IF NOT EXISTS constants_version INTEGER,
+ADD COLUMN IF NOT EXISTS xfip DECIMAL(5,2),
+ADD COLUMN IF NOT EXISTS era_minus INTEGER,
+ADD COLUMN IF NOT EXISTS fip_minus INTEGER,
+ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+-- Players career fielding stats (from players_career_fielding_stats.csv)
+CREATE TABLE IF NOT EXISTS players_career_fielding_stats (
+    player_id INTEGER,
+    year SMALLINT,
+    team_id INTEGER,
+    league_id INTEGER,
+    level_id SMALLINT,
+    split_id SMALLINT,
+    position SMALLINT,
+    tc SMALLINT,
+    a SMALLINT,
+    po SMALLINT,
+    er SMALLINT,
+    ip SMALLINT,
+    g SMALLINT,
+    gs SMALLINT,
+    e SMALLINT,
+    dp SMALLINT,
+    tp SMALLINT,
+    pb SMALLINT,
+    sba SMALLINT,
+    rto SMALLINT,
+    ipf SMALLINT,
+    plays SMALLINT,
+    plays_base SMALLINT,
+    roe SMALLINT,
+    opps_0 SMALLINT,
+    opps_made_0 SMALLINT,
+    opps_1 SMALLINT,
+    opps_made_1 SMALLINT,
+    opps_2 SMALLINT,
+    opps_made_2 SMALLINT,
+    opps_3 SMALLINT,
+    opps_made_3 SMALLINT,
+    opps_4 SMALLINT,
+    opps_made_4 SMALLINT,
+    opps_5 SMALLINT,
+    opps_made_5 SMALLINT,
+    zr DECIMAL(4,3),
+    -- Pre-calculated fielding stats
+    fielding_percentage DECIMAL(4,3),
+    range_factor DECIMAL(4,2),
+    zone_rating DECIMAL(4,3),
+    PRIMARY KEY (player_id, year, team_id, position),
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id),
+    FOREIGN KEY (team_id) REFERENCES teams(team_id),
+    FOREIGN KEY (league_id) REFERENCES leagues(league_id)
+);
+
+-- Players batting ratings (from players_batting.csv)
+CREATE TABLE IF NOT EXISTS players_batting (
+    player_id INTEGER PRIMARY KEY,
+    team_id INTEGER,
+    league_id INTEGER,
+    position SMALLINT,
+    role SMALLINT,
+    batting_ratings_overall_contact SMALLINT,
+    batting_ratings_overall_gap SMALLINT,
+    batting_ratings_overall_eye SMALLINT,
+    batting_ratings_overall_strikeouts SMALLINT,
+    batting_ratings_overall_hp SMALLINT,
+    batting_ratings_overall_power SMALLINT,
+    batting_ratings_overall_babip SMALLINT,
+    batting_ratings_vsr_contact SMALLINT,
+    batting_ratings_vsr_gap SMALLINT,
+    batting_ratings_vsr_eye SMALLINT,
+    batting_ratings_vsr_strikeouts SMALLINT,
+    batting_ratings_vsr_hp SMALLINT,
+    batting_ratings_vsr_power SMALLINT,
+    batting_ratings_vsr_babip SMALLINT,
+    batting_ratings_vsl_contact SMALLINT,
+    batting_ratings_vsl_gap SMALLINT,
+    batting_ratings_vsl_eye SMALLINT,
+    batting_ratings_vsl_strikeouts SMALLINT,
+    batting_ratings_vsl_hp SMALLINT,
+    batting_ratings_vsl_power SMALLINT,
+    batting_ratings_vsl_babip SMALLINT,
+    batting_ratings_talent_contact SMALLINT,
+    batting_ratings_talent_gap SMALLINT,
+    batting_ratings_talent_eye SMALLINT,
+    batting_ratings_talent_strikeouts SMALLINT,
+    batting_ratings_talent_hp SMALLINT,
+    batting_ratings_talent_power SMALLINT,
+    batting_ratings_talent_babip SMALLINT,
+    batting_ratings_misc_bunt SMALLINT,
+    batting_ratings_misc_bunt_for_hit SMALLINT,
+    batting_ratings_misc_gb_hitter_type SMALLINT,
+    batting_ratings_misc_fb_hitter_type SMALLINT,
+    batting_ratings_misc_groundball_pct SMALLINT,
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id)
+);
+
+-- Players pitching ratings (from players_pitching.csv)
+CREATE TABLE IF NOT EXISTS players_pitching (
+    player_id INTEGER PRIMARY KEY,
+    team_id INTEGER,
+    league_id INTEGER,
+    position SMALLINT,
+    role SMALLINT,
+    pitching_ratings_overall_stuff SMALLINT,
+    pitching_ratings_overall_control SMALLINT,
+    pitching_ratings_overall_movement SMALLINT,
+    pitching_ratings_overall_balk SMALLINT,
+    pitching_ratings_overall_hp SMALLINT,
+    pitching_ratings_overall_wild_pitch SMALLINT,
+    pitching_ratings_vsr_stuff SMALLINT,
+    pitching_ratings_vsr_control SMALLINT,
+    pitching_ratings_vsr_movement SMALLINT,
+    pitching_ratings_vsr_balk SMALLINT,
+    pitching_ratings_vsr_hp SMALLINT,
+    pitching_ratings_vsr_wild_pitch SMALLINT,
+    pitching_ratings_vsl_stuff SMALLINT,
+    pitching_ratings_vsl_control SMALLINT,
+    pitching_ratings_vsl_movement SMALLINT,
+    pitching_ratings_vsl_balk SMALLINT,
+    pitching_ratings_vsl_hp SMALLINT,
+    pitching_ratings_vsl_wild_pitch SMALLINT,
+    pitching_ratings_talent_stuff SMALLINT,
+    pitching_ratings_talent_control SMALLINT,
+    pitching_ratings_talent_movement SMALLINT,
+    pitching_ratings_talent_balk SMALLINT,
+    pitching_ratings_talent_hp SMALLINT,
+    pitching_ratings_talent_wild_pitch SMALLINT,
+    pitching_ratings_pitches_fastball SMALLINT,
+    pitching_ratings_pitches_slider SMALLINT,
+    pitching_ratings_pitches_curveball SMALLINT,
+    pitching_ratings_pitches_screwball SMALLINT,
+    pitching_ratings_pitches_forkball SMALLINT,
+    pitching_ratings_pitches_changeup SMALLINT,
+    pitching_ratings_pitches_sinker SMALLINT,
+    pitching_ratings_pitches_splitter SMALLINT,
+    pitching_ratings_pitches_knuckleball SMALLINT,
+    pitching_ratings_pitches_cutter SMALLINT,
+    pitching_ratings_pitches_circlechange SMALLINT,
+    pitching_ratings_pitches_knucklecurve SMALLINT,
+    pitching_ratings_pitches_talent_fastball SMALLINT,
+    pitching_ratings_pitches_talent_slider SMALLINT,
+    pitching_ratings_pitches_talent_curveball SMALLINT,
+    pitching_ratings_pitches_talent_screwball SMALLINT,
+    pitching_ratings_pitches_talent_forkball SMALLINT,
+    pitching_ratings_pitches_talent_changeup SMALLINT,
+    pitching_ratings_pitches_talent_sinker SMALLINT,
+    pitching_ratings_pitches_talent_splitter SMALLINT,
+    pitching_ratings_pitches_talent_knuckleball SMALLINT,
+    pitching_ratings_pitches_talent_cutter SMALLINT,
+    pitching_ratings_pitches_talent_circlechange SMALLINT,
+    pitching_ratings_pitches_talent_knucklecurve SMALLINT,
+    pitching_ratings_misc_velocity SMALLINT,
+    pitching_ratings_misc_arm_slot SMALLINT,
+    pitching_ratings_misc_stamina SMALLINT,
+    pitching_ratings_misc_ground_fly SMALLINT,
+    pitching_ratings_misc_hold SMALLINT,
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id)
+);
+
+-- Players fielding ratings (from players_fielding.csv)
+CREATE TABLE IF NOT EXISTS players_fielding (
+    player_id INTEGER PRIMARY KEY,
+    team_id INTEGER,
+    league_id INTEGER,
+    position SMALLINT,
+    role SMALLINT,
+    fielding_ratings_infield_range SMALLINT,
+    fielding_ratings_infield_arm SMALLINT,
+    fielding_ratings_turn_doubleplay SMALLINT,
+    fielding_ratings_outfield_range SMALLINT,
+    fielding_ratings_outfield_arm SMALLINT,
+    fielding_ratings_catcher_arm SMALLINT,
+    fielding_ratings_catcher_ability SMALLINT,
+    fielding_ratings_infield_error SMALLINT,
+    fielding_ratings_outfield_error SMALLINT,
+    fielding_experience_0 SMALLINT,
+    fielding_experience_1 SMALLINT,
+    fielding_experience_2 SMALLINT,
+    fielding_experience_3 SMALLINT,
+    fielding_experience_4 SMALLINT,
+    fielding_experience_5 SMALLINT,
+    fielding_experience_6 SMALLINT,
+    fielding_experience_7 SMALLINT,
+    fielding_experience_8 SMALLINT,
+    fielding_experience_9 SMALLINT,
+    fielding_rating_pos_1 SMALLINT,
+    fielding_rating_pos_2 SMALLINT,
+    fielding_rating_pos_3 SMALLINT,
+    fielding_rating_pos_4 SMALLINT,
+    fielding_rating_pos_5 SMALLINT,
+    fielding_rating_pos_6 SMALLINT,
+    fielding_rating_pos_7 SMALLINT,
+    fielding_rating_pos_8 SMALLINT,
+    fielding_rating_pos_9 SMALLINT,
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id)
+);
+
+-- Games (from games.csv)
+CREATE TABLE IF NOT EXISTS games (
+    game_id INTEGER,
+    league_id INTEGER,
+    home_team INTEGER,
+    away_team INTEGER,
+    attendance INTEGER,
+    date DATE,
+    time INTEGER,
+    game_type SMALLINT,
+    played SMALLINT,
+    dh SMALLINT,
+    innings SMALLINT,
+    runs_0 SMALLINT,
+    runs_1 SMALLINT,
+    hits_0 SMALLINT,
+    hits_1 SMALLINT,
+    errors_0 SMALLINT,
+    errors_1 SMALLINT,
+    winning_pitcher INTEGER,
+    losing_pitcher INTEGER,
+    save_pitcher INTEGER,
+    starter_0 INTEGER,
+    starter_1 INTEGER,
+    PRIMARY KEY (game_id, date),
+    FOREIGN KEY (home_team) REFERENCES teams(team_id),
+    FOREIGN KEY (away_team) REFERENCES teams(team_id),
+    FOREIGN KEY (winning_pitcher) REFERENCES players_core(player_id),
+    FOREIGN KEY (losing_pitcher) REFERENCES players_core(player_id),
+    FOREIGN KEY (save_pitcher) REFERENCES players_core(player_id),
+    FOREIGN KEY (starter_0) REFERENCES players_core(player_id),
+    FOREIGN KEY (starter_1) REFERENCES players_core(player_id)
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_batting_player_year ON players_career_batting_stats(player_id, year);
+CREATE INDEX IF NOT EXISTS idx_batting_team_year ON players_career_batting_stats(team_id, year);
+CREATE INDEX IF NOT EXISTS idx_batting_year_split ON players_career_batting_stats(year, split_id);
+
+-- Franchise top players query optimization (added 2025-10-10)
+CREATE INDEX IF NOT EXISTS idx_batting_franchise_top_players
+ON players_career_batting_stats(team_id, player_id)
+WHERE split_id = 1 AND war IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_pitching_player_year ON players_career_pitching_stats(player_id, year);
+CREATE INDEX IF NOT EXISTS idx_pitching_team_year ON players_career_pitching_stats(team_id, year);
+CREATE INDEX IF NOT EXISTS idx_pitching_year_split ON players_career_pitching_stats(year, split_id);
+
+-- Franchise top players query optimization (added 2025-10-10)
+CREATE INDEX IF NOT EXISTS idx_pitching_franchise_top_players
+ON players_career_pitching_stats(team_id, player_id)
+WHERE split_id = 1 AND war IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_fielding_player_year ON players_career_fielding_stats(player_id, year);
+CREATE INDEX IF NOT EXISTS idx_fielding_position ON players_career_fielding_stats(position);
+
+CREATE INDEX IF NOT EXISTS idx_games_date ON games(date);
+CREATE INDEX IF NOT EXISTS idx_games_teams ON games(home_team, away_team);
+
+-- ============================================================================
+-- GAME-LEVEL STATISTICS
+-- ============================================================================
+-- Individual player performance statistics for specific games.
+-- These tables enable game-by-game analysis and support newspaper article
+-- generation by providing play-by-play context.
+-- ============================================================================
+
+-- Players Game Batting Stats
+-- Individual batting performance for each game appearance
+CREATE TABLE IF NOT EXISTS players_game_batting_stats (
+    player_id INTEGER NOT NULL,
+    year SMALLINT NOT NULL,
+    game_id INTEGER NOT NULL,
+    team_id INTEGER,
+    ab SMALLINT,
+    h SMALLINT,
+    d SMALLINT,
+    t SMALLINT,
+    hr SMALLINT,
+    r SMALLINT,
+    rbi SMALLINT,
+    bb SMALLINT,
+    k SMALLINT,
+    sb SMALLINT,
+    cs SMALLINT,
+    sf SMALLINT,
+    sh SMALLINT,
+    hp SMALLINT,
+    gdp SMALLINT,
+    PRIMARY KEY (player_id, year, game_id),
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id),
+    FOREIGN KEY (team_id) REFERENCES teams(team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_batting_player ON players_game_batting_stats(player_id);
+CREATE INDEX IF NOT EXISTS idx_game_batting_game ON players_game_batting_stats(game_id);
+CREATE INDEX IF NOT EXISTS idx_game_batting_year ON players_game_batting_stats(year);
+CREATE INDEX IF NOT EXISTS idx_game_batting_hr ON players_game_batting_stats(hr) WHERE hr > 0;
+
+COMMENT ON TABLE players_game_batting_stats IS 'Individual batting performance for each game';
+COMMENT ON COLUMN players_game_batting_stats.game_id IS 'Game identifier from games table';
+
+-- Players Game Pitching Stats
+-- Individual pitching performance for each game appearance
+CREATE TABLE IF NOT EXISTS players_game_pitching_stats (
+    player_id INTEGER NOT NULL,
+    year SMALLINT NOT NULL,
+    game_id INTEGER NOT NULL,
+    team_id INTEGER,
+    ip DECIMAL(4,1),  -- Innings pitched (stored as decimal: 6.2 = 6 2/3 innings)
+    h SMALLINT,       -- Hits allowed
+    r SMALLINT,       -- Runs allowed
+    er SMALLINT,      -- Earned runs
+    bb SMALLINT,      -- Walks
+    k SMALLINT,       -- Strikeouts
+    hr SMALLINT,      -- Home runs allowed
+    bf SMALLINT,      -- Batters faced
+    pc SMALLINT,      -- Pitch count
+    w SMALLINT,       -- Win (1 or 0)
+    l SMALLINT,       -- Loss (1 or 0)
+    sv SMALLINT,      -- Save (1 or 0)
+    hld SMALLINT,     -- Hold (1 or 0)
+    bs SMALLINT,      -- Blown save (1 or 0)
+    cg SMALLINT,      -- Complete game (1 or 0)
+    sho SMALLINT,     -- Shutout (1 or 0)
+    qs SMALLINT,      -- Quality start (1 or 0)
+    PRIMARY KEY (player_id, year, game_id),
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id),
+    FOREIGN KEY (team_id) REFERENCES teams(team_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_game_pitching_player ON players_game_pitching_stats(player_id);
+CREATE INDEX IF NOT EXISTS idx_game_pitching_game ON players_game_pitching_stats(game_id);
+CREATE INDEX IF NOT EXISTS idx_game_pitching_year ON players_game_pitching_stats(year);
+CREATE INDEX IF NOT EXISTS idx_game_pitching_k ON players_game_pitching_stats(k) WHERE k >= 10;
+CREATE INDEX IF NOT EXISTS idx_game_pitching_cg ON players_game_pitching_stats(cg) WHERE cg = 1;
+
+COMMENT ON TABLE players_game_pitching_stats IS 'Individual pitching performance for each game';
+COMMENT ON COLUMN players_game_pitching_stats.ip IS 'Innings pitched as decimal (6.2 = 6 2/3 IP)';
+COMMENT ON COLUMN players_game_pitching_stats.w IS 'Win credited (1 or 0)';
+COMMENT ON COLUMN players_game_pitching_stats.qs IS 'Quality start: 6+ IP, 3 or fewer ER';

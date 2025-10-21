@@ -1,0 +1,147 @@
+"""Staging table management for ETL pipeline"""
+from pandas.core.interchange.dataframe_protocol import DataFrame
+from sqlalchemy import text, inspect
+from loguru import logger
+from .connection import db
+import pandas as pd
+
+class StagingTableManager:
+    def __init__(self, connection=None):
+        self.db = connection or db
+        self.inspector = inspect(self.db.engine)
+
+    def create_staging_table(self, source_table: str, staging_prefix: str = "staging_"):
+        """Create a staging table with the same structure as the source table"""
+        staging_table = f"{staging_prefix}{source_table}"
+
+        logger.info(f"Creating staging table: {staging_table}")
+
+        try:
+            # Drop existing staging table
+            self.drop_staging_table(staging_table)
+
+            # Create staging table as copy of source structure
+            sql = text(f"""
+            CREATE TABLE {staging_table} (LIKE {source_table} INCLUDING ALL)""")
+            self.db.execute_sql(sql)
+            logger.success(f"Successfully created staging table: {staging_table}")
+            return staging_table
+
+        except Exception as e:
+            logger.error(f"Error creating staging table {staging_table}: {e}")
+            raise
+
+
+    def create_staging_from_csv_structure(self, table_name: str, columns: dict, staging_prefix: str = "staging_"):
+        """Create staging table from CSV column definitions"""
+        staging_table = f"{staging_prefix}{table_name}"
+        logger.info(f"Creating staging table: {staging_table}")
+        try:
+            # Drop existing staging table
+            self.drop_staging_table(staging_table)
+
+           # Build column definitions
+            column_defs = []
+            for col_name, col_type in columns.items():
+                column_defs.append(f"{col_name} {col_type}")
+
+            # Create SQL
+            sql = text(f"""
+                CREATE TABLE {staging_table} (
+                    {', '.join(column_defs)}
+                )""")
+            self.db.execute_sql(sql)
+            logger.success(f"Successfully created staging table: {staging_table}")
+            return staging_table
+
+        except Exception as e:
+            logger.error(f"Error creating staging table {staging_table}: {e}")
+            raise
+
+
+    def analyze_staging_changes(self, staging_table: str, target_table: str, key_columns: list):
+        """Analyze differences between staging and target tables"""
+        logger.info(f"Analyzing changes between {staging_table} and {target_table}")
+        key_join = ' AND '.join([f"s.{col} = t.{col}" for col in key_columns])
+
+        # Count new records
+        new_records_sql = text(f"""
+            SELECT COUNT(*) FROM {staging_table} s
+            WHERE NOT EXISTS (
+                SELECT 1 FROM {target_table} t
+                WHERE {key_join}
+            )
+        """)
+
+        changed_records_sql = text(f"""
+        SELECT COUNT(*) FROM {staging_table} s
+        INNER JOIN {target_table} t ON {key_join}
+        WHERE s != t""")
+
+        with self.db.get_session() as session:
+            new_count = session.execute(new_records_sql).scalar()
+            # changed_count = session.execute(changed_records_sql).scalar()
+
+        logger.info(f"Found {new_count} new records")
+        return {
+            "new_records": new_count,
+            # "changed_records": changed_count
+            'staging_table': staging_table,
+            'target_table': target_table
+        }
+
+
+    def get_staging_tables(self):
+        """List all staging tables in database"""
+        sql_text = text("""
+        SELECT tablename FROM pg_tables
+        WHERE tablename LIKE 'staging_%'
+        ORDER BY tablename
+        """)
+
+        with self.db.get_session() as session:
+            results = session.execute(sql_text).fetchall()
+            return [r[0] for r in results]
+
+
+    def cleanup_staging_tables(self, pattern: str = 'staging_%'):
+        """Remove all staging tables matching pattern"""
+        staging_tables = self.get_staging_tables()
+        for table in staging_tables:
+            if table.startswith(pattern.replace('%', '')):
+                self.drop_staging_table(table)
+        logger.info(f"Cleaned up {len(staging_tables)} staging tables")
+
+    def drop_staging_table(self, staging_table: str):
+        """Drop staging table if exists"""
+        try:
+            sql = text(f"DROP TABLE IF EXISTS {staging_table} CASCADE")
+            self.db.execute_sql(sql)
+            logger.debug(f"Dropped staging table: {staging_table}")
+        except Exception as e:
+            logger.warning(f"Error dropping staging table {staging_table}: {e}")
+
+    def copy_csv_to_staging(self, csv_path: str, staging_table: str, delimiter: str = ',', df: DataFrame = None):
+        """Copy CSV data into staging table using pandas"""
+        logger.info(f"Loading CSV data from {csv_path} into {staging_table}")
+        try:
+            # Use provided df or read from CSV
+            if df is None:
+                df = pd.read_csv(csv_path, delimiter=delimiter)
+
+            # Use pandas to_sql for bulk insert
+            with self.db.engine.connect() as conn:
+                rows_affected = df.to_sql(
+                    staging_table,
+                    conn,
+                    if_exists='append',
+                    index=False,
+                    method='multi',
+                    chunksize=1000
+                )
+            logger.success(f"Loaded {len(df)} rows into {staging_table}")
+            return len(df)
+
+        except Exception as e:
+            logger.error(f"Error loading CSV into {staging_table}: {e}")
+            raise

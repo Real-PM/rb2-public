@@ -1,0 +1,94 @@
+---
+tags: [architecture, overview, foundation]
+created: 2025-09-10
+updated: 2025-09-10
+---
+
+
+
+# OOTP Web
+## Project Overview  
+This project is a complement to the game Out of the Park Baseball. 
+It extracts data and images from the game installed on a PC or Mac and
+ populates a website with statistics, league history, and other insights not
+available in-game. The data portion of the website will be similar in design to
+[`baseball-reference.com`](https://baseball-reference.com). There will be a 
+second section of the website that will function as a sort of newspaper, 
+combining the game-generated news-stories along with AI-generated stories, 
+manually written stories, and other content.  
+  
+The following sections will describe the major components of this project:  
+-  Dev, Stage, and Prod Environments  
+-  Web Server and Database Architecture  
+-  Extraction, Transformation, and Loading of OOTP Game Data  
+-  Data Portion of the Site (i.e. the `baseball-reference.com` section)  
+-  The Newspaper Portion of the Site  
+  
+## Environments  
+### Dev  
+Development will occur mostly on local machines: Pop OS (i9, 64GB RAM, RTX 4090 GPU)
+ and a MacBook Pro 2019 (64GB RAM). The game itself is installed on the Mac.
+To the greatest extent possible, we will leverage PyCharm to preview HTML and CSS.
+The Pop OS machine will use a virtual environment located at `/home/jayco/virtual-envs/ootp`. The Mac will use a venv located in the project root.  
+  
+Both machines will use PyCharm IDE and will be assisted by Claude AI and 
+Claude Code.  
+  
+Version control is via git and Github.
+  
+### Stage  
+A webserver on a Beelink mini PC running Ubuntu 22.04. Caddy is 
+running on this machine, along with Docker.  It is on the local network, and 
+it hosts several public websites.  We will refer to this machine by its hostname `Minotaur`.
+  
+### Production  
+A VPS at 104.225.217.24. It is running Ubuntu 24.04.3, has Caddy installed, 
+and is hosting several websites. It does not have a lot of storage or compute 
+power. it can be accessed most easily from the Pop OS machine via ssh.
+   
+## Architecture  
+### Database  
+This is a very data-heavy project. The work to date has used MySQL for 
+database, but the current production server will not support a large 
+database or the data traffic needed to populate and maintain it. Work to 
+date includes scripts for ETL in MySQL. These are located in the `scripts` directory. If there is a better alternative to MySQL, I am happy to explore that.  
+  
+### Web Server Architecture  
+### Code Base  
+The work to date has used primarily bash for ETL, using MySQL. There are a few python scripts for renaming images. Work on the data section of the website has been in PHP.  
+  
+Future portions of the website- the newspaper section and other planned features will rely much more heavily on Python to interact with local and remote LLMs. Local LLMs may be accessed with Ollama (first choice) or via LMStudio.  
+  
+## ETL of OOTP Game Data  
+We will be using OOTP 25 as the source of our data. On our development Mac, the source data is located at `/Users/Jayco/Library/Containers/com.ootpdevelopments.ootp25macalm/Data/Application Support/Out of the Park Developments/OOTP Baseball 25/saved_games/$game`, where `$game` is the name of the specific save.  
+  
+From within game, the player will dump the data for MySQL. The scripts will execute on the game machine to transform and load the data to a MySQL server.  
+  
+Much of the transformation and loading is straightforward, but there are a few tables in particular that require a callout:  
+-  `calcbatting.sql` and `calcpitching.sql` create tables for calculated batting and pitching statistics, respectively. The scripts are large and complex, but they produce accurate statistics.  
+-  Streamlining the ETL process for game data is a high priority item- as the current process essentially recreates and recalculates the entire DB on every update.  
+-  Current scripts have MySQL credentials hard-coded. They should be stored in an .env or secrets file.  
+-  The absolute file references in `local_script.sh` are out of date, and they should be replaced with relative paths.  
+-  Player and coach pictures are located in `/Users/Jayco/Library/Containers/com.ootpdevelopments.ootp25macalm/Data/Application Support/Out of the Park Developments/OOTP Baseball 25/saved_games/$game/news/html/person_pictures`. Filepaths for the images must be added as a column to the `players` table.
+
+## Data Portion of Website  
+The vision for this section of the site is close to [baseball-reference.com](https://baseball-reference.com): it will show individual and team data along with biographical/demographic data. It will be fully linked and navigable. Data for these pages will be sourced from the database.  
+  
+-  There must be Overview pages for each league, showing statistics for each year.
+-  There must be Overview pages for each team, showing statistics for each year.  
+  
+An initial attempt was made to code this website using PHP. The files are located in the `false_start` directory. Given the requirements for the Newspaper section, PHP may not be a suitable framework.  
+## Newspaper Section  
+This section will carry a narrative of the baseball universe over time, through the lens of the Branch family. Content will be generated in the following ways:  
+-  Some game-generated news stories will be copied and pasted. Will need to determine how to select them.  
+-  AI Generated Content:  
+    - The application will parse game logs, box scores, transaction data, and game-generated news stories for mentions of Branch family members. It will pass the relevant data to an LLM that will generate a news story.  
+    - Similar for other noteworthy events such as (not limited to) news or accomplishments for teams or personalities in the Branch orbit, major changes or events in the league or baseball universe.
+-  User generated content. We will develop a template that can handle game dates and players and put these items in a watch folder, or some other mechanism such that the application can consume them and incorporate them into the site.  
+-  All people and teams mentioned in this section must have links to the appropriate page of the Data Section.  
+
+## Related Documentation
+[[architecture/WEBSITE-SPECS]] - Detailed requirements  
+[[architecutre/DATA-MODEL|Data Model]] - How data is structured  
+[[architecture/WEB-IMPLEMENTATION-PLAN|Implementation Plan]] - How we're building  
+[[Architecture MOC| Back to Architecture MOC]]

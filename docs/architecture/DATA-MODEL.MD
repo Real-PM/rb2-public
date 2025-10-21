@@ -1,0 +1,546 @@
+n# OOTP Web Data Model Documentation
+
+## Executive Summary
+This document describes the current data model for the OOTP Web project and proposes optimizations to address performance issues. The database contains baseball simulation data exported from Out of the Park Baseball 25, with volumes reaching millions of rows over 100 years of simulated seasons.
+
+## Current State Analysis
+
+### Data Volume Projections
+- **Players**: ~50,000 rows
+- **Player Career Stats**: ~1 million rows (batting, pitching, fielding combined)
+- **Games**: ~11.7 million rows (without filtering)
+- **Total Database Size**: Estimated 50-100GB over 100 simulated years
+
+### Performance Issues
+- Simple SELECT queries take up to 1.5 seconds
+- Wide tables (140+ columns) causing inefficient queries
+- No proper indexing strategy
+- Full table reloads on each update (TRUNCATE and INSERT)
+
+### Infrastructure
+- **Development**: Local machines (PopOS & Mac)
+- **Staging**: Minotaur server (Ubuntu/Docker)
+- **Production**: VPS with 32GB RAM, 8 vCPU, 640GB storage
+
+## Proposed Data Model Optimizations
+
+### 1. Database Platform Recommendation
+**Recommendation**: Migrate from MySQL to PostgreSQL
+
+**Rationale**:
+- Better performance for complex analytical queries
+- Superior indexing capabilities (partial, expression indexes)
+- Native JSON support for flexible schema elements
+- Better query planner for multi-table joins
+- Materialized views for pre-calculated statistics
+
+### 2. Table Normalization Strategy
+
+#### Players Table Decomposition
+Split the 140+ column `players` table into logical entities:
+
+```sql
+-- Core player information (rarely changes)
+players_core (
+    player_id INT PRIMARY KEY,
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+    nick_name VARCHAR(50),
+    date_of_birth DATE,
+    city_of_birth_id INT,
+    nation_id INT,
+    height SMALLINT,
+    weight SMALLINT,
+    bats SMALLINT,
+    throws SMALLINT,
+    image_path VARCHAR(255),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+)
+
+-- Current status (changes seasonally)
+players_current_status (
+    player_id INT PRIMARY KEY,
+    team_id INT,
+    league_id INT,
+    position SMALLINT,
+    role SMALLINT,
+    uniform_number SMALLINT,
+    retired BOOLEAN,
+    free_agent BOOLEAN,
+    hall_of_fame BOOLEAN,
+    season_year INT,
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id)
+)
+
+-- Contract information
+players_contracts (
+    player_id INT,
+    season_year INT,
+    team_id INT,
+    salary INT,
+    years_remaining INT,
+    contract_type VARCHAR(20),
+    PRIMARY KEY (player_id, season_year),
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id)
+)
+
+-- Ratings (changes annually)
+players_ratings (
+    player_id INT,
+    season_year INT,
+    rating_type VARCHAR(20), -- 'batting', 'pitching', 'fielding'
+    ratings JSONB, -- Store all ratings as JSON for flexibility
+    PRIMARY KEY (player_id, season_year, rating_type),
+    FOREIGN KEY (player_id) REFERENCES players_core(player_id)
+)
+```
+
+#### Reference Tables Optimization
+Streamlined reference tables to include only essential columns:
+
+```sql
+-- Leagues table (reduced from 160+ columns to 11 essential columns)
+leagues (
+    league_id INT PRIMARY KEY,
+    name VARCHAR(100),
+    abbr VARCHAR(10),
+    nation_id INT,
+    language_id INT,
+    logo_file_name VARCHAR(200),
+    parent_league_id INT,  -- Self-referential for league hierarchy
+    league_state SMALLINT,
+    season_year INT,
+    league_level SMALLINT,
+    current_date_year INT,  -- Renamed from 'current_date' (reserved keyword)
+    FOREIGN KEY (nation_id) REFERENCES nations(nation_id),
+    FOREIGN KEY (language_id) REFERENCES languages(language_id),
+    FOREIGN KEY (parent_league_id) REFERENCES leagues(league_id)
+)
+```
+
+#### Reference Table Foreign Key Handling
+All reference tables implement NULLIF transformations to convert 0 values to NULL for optional foreign keys:
+
+- **leagues**: `parent_league_id = NULLIF(parent_league_id, 0)`
+- **teams**: `parent_team_id, city_id, park_id, league_id, sub_league_id, division_id, nation_id, human_id = NULLIF(column, 0)`
+- **cities**: `state_id, main_language_id = NULLIF(column, 0)`
+
+This resolves foreign key violations where CSVs use 0 to indicate "no relationship" but database expects NULL.
+
+### 3. Statistics Architecture
+
+#### Pre-calculated Statistics Tables
+```sql
+-- Batting statistics with pre-calculated advanced metrics
+batting_stats_calculated (
+    player_id INT,
+    year SMALLINT,
+    team_id INT,
+    split_id SMALLINT,
+    -- Basic stats
+    games INT,
+    plate_appearances INT,
+    at_bats INT,
+    hits INT,
+    -- ... other counting stats ...
+    
+    -- Pre-calculated advanced stats
+    batting_average DECIMAL(4,3),
+    on_base_percentage DECIMAL(4,3),
+    slugging_percentage DECIMAL(4,3),
+    woba DECIMAL(4,3),
+    wrc_plus INT,
+    war DECIMAL(3,1),
+    
+    PRIMARY KEY (player_id, year, team_id, split_id),
+    INDEX idx_year_team (year, team_id),
+    INDEX idx_stats (year, batting_average, on_base_percentage)
+)
+```
+
+#### Archive Strategy
+```sql
+-- Recent data (last 10 years) - optimized for frequent access
+batting_stats_recent -- Same structure as above
+
+-- Historical data (older than 10 years) - compressed, partitioned
+batting_stats_archive -- Partitioned by decade
+```
+
+### 4. Game Data Optimization
+
+#### Filtered Game Storage
+```sql
+-- Store only Branch family orbit games in detail
+games_branch_orbit (
+    -- Full game data for Branch-related games
+)
+
+-- Aggregate other games
+games_summary (
+    date DATE,
+    league_id INT,
+    games_played INT,
+    total_runs INT,
+    -- Other aggregate stats
+    PRIMARY KEY (date, league_id)
+)
+```
+
+### 5. ETL Process Improvements
+
+#### Change Detection System
+```sql
+-- Track data versions for incremental updates
+etl_data_versions (
+    table_name VARCHAR(50),
+    last_update_date TIMESTAMP,
+    row_count INT,
+    checksum VARCHAR(64),
+    PRIMARY KEY (table_name)
+)
+
+-- Log changes for audit
+etl_change_log (
+    change_id SERIAL PRIMARY KEY,
+    table_name VARCHAR(50),
+    operation VARCHAR(10),
+    player_id INT,
+    changed_fields JSONB,
+    change_date TIMESTAMP
+)
+```
+
+### 6. Branch Family Tracking
+```sql
+-- Identify Branch family members and associations
+branch_family_members (
+    person_id INT PRIMARY KEY,
+    person_type VARCHAR(20), -- 'player', 'coach', 'executive'
+    relationship VARCHAR(50),
+    branch_generation INT,
+    notes TEXT
+)
+
+-- Track Branch orbit teams/organizations
+branch_orbit_teams (
+    team_id INT,
+    season_year INT,
+    relationship_type VARCHAR(50),
+    PRIMARY KEY (team_id, season_year)
+)
+```
+
+### 7. Newspaper Content Schema
+```sql
+-- Store generated content
+newspaper_articles (
+    article_id SERIAL PRIMARY KEY,
+    publish_date DATE,
+    game_date DATE,
+    article_type VARCHAR(50), -- 'game_summary', 'ai_generated', 'user_submitted'
+    headline VARCHAR(255),
+    content TEXT,
+    related_players INT[], -- Array of player_ids
+    related_teams INT[], -- Array of team_ids
+    metadata JSONB
+)
+
+-- Link articles to game events
+article_game_links (
+    article_id INT,
+    game_id INT,
+    PRIMARY KEY (article_id, game_id)
+)
+```
+
+## Implementation Recommendations
+
+### Phase 1: Player Schema Normalization ✅ COMPLETED
+**Objective**: Replace monolithic players table with normalized structure as documented in Section 2.
+
+#### Step 1.1: Replace Players Table with Normalized Schema ✅ COMPLETED
+- **File**: `sql/tables/02_persons.sql` 
+- **Status**: Implemented 4-table normalized structure
+- **Results**: Successfully loading 27,820 players across 4 tables
+
+#### Step 1.2: Create Multi-Target Player Loader ✅ COMPLETED  
+- **File**: `src/loaders/players_loader.py`
+- **Status**: Implemented with JSONB ratings storage
+- **Results**: 111,280 ratings records loaded successfully
+
+### Constants Calculation Architecture
+
+#### 3-Phase Processing Requirements
+As documented in the original requirements: "Raw stats must be loaded first, then league constants calculated, then advanced player metrics"
+
+**Phase A: Raw Statistics Loading**
+1. Load basic counting stats (AB, H, HR, etc.) with traditional rate stats (AVG, OBP, SLG)
+2. Set advanced stats placeholders (wOBA, wRC+, FIP) to NULL
+3. Set `constants_version = NULL` to indicate pending calculation
+
+**Phase B: League Constants Calculation**
+1. Calculate league-wide constants needed for advanced metrics:
+   - `league_woba_constants` (wBB, wHBP, w1B, w2B, w3B, wHR values by year/league)  
+   - `league_park_factors` (offensive environment adjustments)
+   - `league_fip_constants` (lgFIP constant by year/league for FIP calculation)
+
+**Phase C: Advanced Metrics Calculation**
+1. Update player stats with calculated wOBA and FIP using league constants
+2. Set `constants_version = [current_version]` to track calculation state
+3. Enable incremental recalculation when constants change
+
+Note: WAR values are provided directly by the game and loaded as raw stats.
+
+### Phase 2: Statistics Architecture Enhancement
+**Objective**: Implement pre-calculated advanced metrics and archive strategy.
+
+#### Step 2.1: Enhance Statistics Tables
+- **File**: `sql/tables/03_statistics_complete.sql`
+- **Changes**: Add pre-calculated columns to existing stats tables:
+  - `batting_stats`: Add wOBA, wRC+, WAR, OPS+
+  - `pitching_stats`: Add FIP, xFIP, SIERA, WAR
+  - `fielding_stats`: Add UZR, DRS, advanced metrics
+- **Loaders**: No changes yet
+
+#### Step 2.2: Create Archive Tables
+- **File**: `sql/tables/03_statistics_complete.sql`
+- **Changes**: Create archive versions of stats tables:
+  - `batting_stats_recent` (last 10 years)
+  - `batting_stats_archive` (historical, partitioned)
+  - Mirror structure for pitching and fielding
+- **Loaders**: Update stats loaders to route data by year
+
+#### Step 2.3: Implement Advanced Calculations
+- **File**: `sql/tables/05_calculation_functions.sql`
+- **Changes**: Create functions for advanced metrics:
+  - wOBA calculation with league constants
+  - WAR calculations for batters and pitchers
+  - Park factor adjustments
+- **Loaders**: Update `BattingStatsLoader` and `PitchingStatsLoader` to calculate advanced metrics
+
+#### Step 2.4: Create League Constants Automation
+- **File**: Create `src/calculators/league_constants.py`
+- **Changes**: Automate calculation of league constants needed for advanced metrics
+- **Loaders**: Integrate league constants calculation into ETL pipeline
+
+### Phase 3: Branch Family and Content Schema
+**Objective**: Add Branch family tracking and newspaper content capabilities.
+
+#### Step 3.1: Branch Family Tracking Tables
+- **File**: `sql/tables/02_persons.sql`
+- **Changes**: Add tables from documented strategy:
+  - `branch_family_members` (identify family members)
+  - `branch_orbit_teams` (track associated teams)
+- **Loaders**: Create `BranchFamilyLoader` for manual family data management
+
+#### Step 3.2: Newspaper Content Schema
+- **File**: Create `sql/tables/06_content.sql`
+- **Changes**: Implement newspaper content tables:
+  - `newspaper_articles` (generated content)
+  - `article_game_links` (link articles to games)
+- **Loaders**: Create `ContentLoader` for article management
+
+### Phase 4: Game Data Optimization
+**Objective**: Implement filtered game storage focusing on Branch family orbit.
+
+#### Step 4.1: Game Data Filtering
+- **File**: `sql/tables/07_games_optimized.sql`
+- **Changes**: Create optimized game storage:
+  - `games_branch_orbit` (detailed Branch-related games)
+  - `games_summary` (aggregated non-Branch games)
+- **Loaders**: Create `GamesOptimizedLoader` with Branch family filtering
+
+#### Step 4.2: Historical Game Migration
+- **File**: Create `scripts/migrate_games_data.py`
+- **Changes**: Migrate existing game data into optimized structure
+- **Loaders**: Update game loading to use filtering logic
+
+### Phase 5: ETL Process Enhancement
+**Objective**: Improve change detection and incremental loading.
+
+#### Step 5.1: Enhanced Change Detection
+- **File**: `sql/tables/00_etl_metadata.sql`
+- **Changes**: Add tables from documented strategy:
+  - `etl_data_versions` (version tracking)
+  - `etl_change_log` (audit trail)
+- **Loaders**: Update all loaders to use enhanced change detection
+
+#### Step 5.2: Incremental Loading Implementation
+- **File**: `src/loaders/base_loader.py`
+- **Changes**: Complete implementation of incremental loading strategy
+  - Enhance `_handle_incremental_load` method
+  - Implement watermark-based loading
+- **Loaders**: All stat loaders benefit from true incremental capability
+
+### Incremental Loading Strategy
+
+#### Current Implementation: Safe but Slow
+The current ETL process uses a "full load with UPSERT" approach:
+- **Reference Tables**: Use checksum-based skip strategy (only load if CSV changed)
+- **Statistics Tables**: Load entire CSV into staging → UPSERT all records to target
+- **Players Tables**: Multi-target UPSERT across normalized tables
+
+This approach is safe and handles all edge cases but processes unchanged records on every load.
+
+#### Future Incremental Implementation Strategy
+
+**Objective**: Only process records that have actually changed to improve performance.
+
+##### Record-Level Change Detection
+**Approach 1: Timestamp-Based Watermarking**
+```sql
+-- Add to all statistics tables
+ALTER TABLE players_career_batting_stats 
+ADD COLUMN IF NOT EXISTS data_updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ADD COLUMN IF NOT EXISTS etl_processed_date TIMESTAMP;
+```
+
+**Implementation**:
+1. CSV exports include `data_updated_date` from OOTP database
+2. ETL tracks `max(data_updated_date)` as watermark in `etl_data_versions`
+3. Only load records where `data_updated_date > last_watermark`
+4. Update watermark after successful load
+
+**Approach 2: Record Checksums**
+```sql
+-- Add to statistics tables
+ALTER TABLE players_career_batting_stats 
+ADD COLUMN IF NOT EXISTS record_checksum VARCHAR(32);
+```
+
+**Implementation**:
+1. Calculate MD5/SHA256 of key statistical fields for each record
+2. Compare incoming checksums against stored checksums
+3. Only UPSERT records with different checksums
+4. Store new checksums after processing
+
+##### Hybrid Strategy Recommendation
+
+**Phase 1: CSV-Level Incremental (Current)**
+- Reference tables: Skip if CSV checksum unchanged ✅ **IMPLEMENTED**
+- Statistics tables: Always full load (safe for data consistency)
+
+**Phase 2: Record-Level Incremental (Future Enhancement)**
+- **High-volume tables** (batting_stats, pitching_stats): Record-level incremental
+- **Low-volume tables** (players, teams): Continue full load approach
+- **Audit tables**: Always append-only
+
+##### Implementation Components
+
+**1. Enhanced Metadata Tracking**
+```sql
+-- Extend etl_data_versions table
+ALTER TABLE etl_data_versions ADD COLUMN 
+  last_watermark_date TIMESTAMP,
+  incremental_strategy VARCHAR(20) DEFAULT 'full_load';
+```
+
+**2. Watermark Management**
+```python
+class IncrementalLoader:
+    def get_last_watermark(self, table_name: str) -> Optional[datetime]:
+        """Get the last processed timestamp for incremental loading"""
+    
+    def update_watermark(self, table_name: str, new_watermark: datetime):
+        """Update the watermark after successful incremental load"""
+    
+    def get_incremental_records(self, df: pd.DataFrame, watermark: datetime) -> pd.DataFrame:
+        """Filter DataFrame to only include records newer than watermark"""
+```
+
+**3. Fallback Strategy**
+- If incremental load fails → automatically fall back to full load
+- Configurable per table based on data volume and change frequency
+- Monitor incremental vs full load performance metrics
+
+**4. Data Validation**
+- Compare record counts: incremental loads + existing records = expected totals
+- Spot-check statistical calculations to ensure consistency
+- Alert on unexpected data volume changes
+
+##### Performance Benefits
+- **Statistics tables**: 90% reduction in processing time (only changed records)
+- **Database load**: Reduced CPU/memory usage during ETL windows  
+- **Storage**: Faster inserts, reduced WAL generation
+- **Downstream**: Advanced metrics recalculation only for affected records
+
+##### Risk Mitigation
+- Comprehensive audit logging of incremental decisions
+- Easy rollback to full-load strategy per table
+- Data validation checks to catch incremental processing errors
+- Regular full-load cycles (weekly/monthly) to ensure data consistency
+
+#### Step 5.3: Performance Optimization
+- **File**: `sql/tables/08_indexes_views.sql`
+- **Changes**: Create indexes and materialized views:
+  - Indexes for common query patterns
+  - Materialized views for leaderboards
+  - Partitioning for large tables
+- **Loaders**: Update loading procedures to refresh materialized views
+
+### Phase 6: Application Layer Preparation
+**Objective**: Prepare database for application integration.
+
+#### Step 6.1: API-Ready Views
+- **File**: `sql/tables/09_api_views.sql`
+- **Changes**: Create views optimized for API consumption:
+  - Player profile views (joining normalized tables)
+  - Statistics summary views
+  - Leaderboard views
+- **Loaders**: No changes needed
+
+#### Step 6.2: Data Access Optimization
+- **File**: Create `src/database/api_queries.py`
+- **Changes**: Pre-defined query functions for common operations
+- **Loaders**: Add data validation queries for ETL quality checks
+
+## Technology Stack Recommendation
+
+- **Database**: PostgreSQL 14+
+- **Backend**: FastAPI (Python)
+- **ORM**: SQLAlchemy
+- **Caching**: Redis
+- **Task Queue**: Celery (for ETL processes)
+- **Frontend**: Static site generator (Hugo/Jekyll) or React
+- **Deployment**: Docker containers
+
+## Performance Targets
+
+With these optimizations:
+- Simple queries: < 100ms
+- Complex statistics: < 500ms
+- Leaderboard queries: < 200ms (cached)
+- Page load times: < 2 seconds
+
+## Security Considerations
+
+- Use .env files for all credentials
+- Implement read-only database users for web application
+- Store sensitive configuration in environment variables
+- Regular backups to cloud storage (S3-compatible)
+  
+  
+## Adjustments Required Prior to Web App Build  
+### League History  
+`league_history.csv` contains the awards for best hitter, pitcher, and fielder at all positions for each sub-league and 
+league for each year. We will want to include this data in the league pages on the reference site.  
+### Team History  
+`team_history.csv` tracks changes to a team's name (city), abbr, and Nickname over time, along with manager, playoff
+appearances, and best players for each year. This is data we will want to display on the team history and team year pages.  
+### Team History Batting and Pitching Stats  
+`team_history_batting.csv` and `team_history_pitching.csv` contain yearly batting and pitching stats for teams as a whole 
+for each year. We will want this data for team home and team year pages.  
+### Team History Record
+`team_history_record.csv` has the historical w/l and standings records for teams. This is good data for team home and team 
+year pages.  
+### Team Current Roster and Staff  
+`team_roster.csv` and `team_roster_staff.csv` are lists of players and staff, respectively, for teams for the current 
+season. This is good data for team home pages.  
+### News  
+The game generates and exports transaction and other news items. These items are in `trade_history.csv` and 
+`messages.csv`. We will want to include a subset of these in the newspaper section. We will have to parse `messages.csv`
+ to determine the right data to use and how the references work before incorporating it into the newspaper app. Until then, 
+we should simply load it to the db.
+

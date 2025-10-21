@@ -1,0 +1,124 @@
+================================================================
+MODEL COMPARISON: Structured Prompt with Detailed Facts
+================================================================
+
+PROMPT USED:
+------------
+Write a 200-250 word newspaper article in 1960s journalistic style.
+
+GAME FACTS (DO NOT CHANGE THESE):
+- Seattle Pilots defeated San Francisco Giants 5-3
+- Date: July 15, 1965 at Candlestick Park
+- Attendance: 15,234
+- Winning Pitcher: Jim Bouton (8-5)
+- Losing Pitcher: Gaylord Perry (6-7)
+- Save: Diego Segui (12)
+
+FEATURED PLAYER - Rickey Branch:
+- Position: Center Field
+- Batting: 3-for-4, 2 RBIs, 2 runs scored
+- Key moments:
+  * 3rd inning: Single to left, scored on Tommy Harper sacrifice fly
+  * 6th inning: Single to right
+  * 8th inning: Go-ahead RBI double to left-center gap, scoring Harper and Don Mincher
+
+GAME SUMMARY:
+- Giants led 2-1 after 5 innings
+- Pilots rallied for 4 runs in 8th inning
+- Final score: Pilots 5, Giants 3
+- Pilots improve to 45-52 on the season
+
+ONLY mention the players and facts listed above. Do NOT invent additional player names, statistics, or game details.
+Write in past tense, factual journalistic style from the 1960s.
+Focus on Rickey Branch's performance and the 8th inning rally.
+
+
+================================================================
+LLAMA3.1:8B OUTPUT (Word Count: ~210)
+================================================================
+
+GIANTS FALL TO PILOTS IN THRILLING CONTEST
+
+San Francisco, CA - July 15, 1965 - In a contest that will be remembered for some time to come, the Seattle Pilots emerged victorious over their cross-country rivals, the San Francisco Giants, by a score of 5-3 at Candlestick Park.
+
+Rickey Branch, center fielder for the Pilots, was instrumental in his team's triumph. The young outfielder went 3-for-4 at the plate, racking up two runs scored and two crucial RBIs. His key moments came in the 3rd, 6th, and 8th innings as he singled to left, right, and then delivered a go-ahead RBI double to left-center.
+
+The Pilots' comeback was sparked by Branch's heroics in the 8th inning. After falling behind 2-1, they rallied for four crucial runs, turning the tables on the Giants. The decisive blow came courtesy of Branch's double, scoring teammates Tommy Harper and Don Mincher.
+
+Jim Bouton earned the win for Seattle, improving to an 8-5 record, while Gaylord Perry suffered the loss, dropping to 6-7. Diego Segui secured the save for the Pilots. Attendance at Candlestick Park was a healthy 15,234.
+
+The Pilots' victory marked their first win over the Giants this season and improved their overall record to 45-52.
+
+
+ANALYSIS - LLAMA3.1:8B:
+-----------------------
+✓ Stayed within word count (210 vs 200-250 target)
+✓ Used ONLY provided facts - NO hallucinated players or stats
+✓ Correctly mentioned all key players (Branch, Harper, Mincher, Bouton, Perry, Segui)
+✓ Good 1960s journalistic style
+✓ Accurate game flow and score progression
+✓ Included all required details (attendance, records, save)
+✗ Added one unsupported claim: "marked their first win over the Giants this season" - not in prompt
+
+HALLUCINATION SCORE: 1/10 (minimal - one tiny embellishment)
+
+
+================================================================
+QWEN3:14B OUTPUT (Word Count: ~265)
+================================================================
+
+**Pilots Rally in 8th to Defeat Giants, 5-3**
+*July 16, 1965*
+
+The Seattle Pilots staged a dramatic eighth-inning rally to defeat the San Francisco Giants, 5-3, before a crowd of 15,234 at Candlestick Park on Friday night. The victory, highlighted by a clutch performance by center fielder Rickey Branch, lifted the Pilots to a 45-52 season mark.
+
+After trailing, 2-1, following five innings, Seattle erupted for four runs in the eighth, capped by Branch's go-ahead RBI double to left-center field. The play, which scored Tommy Harper and Don Mincher, proved pivotal as the Pilots seized control. Branch, who went 3-for-4 with two RBIs and two runs scored, earlier contributed a sacrifice fly in the third and a single in the sixth.
+
+Seattle's winning pitcher, Jim Bouton (8-5), held the Giants to three runs over seven innings, while reliever Diego Segui (12) earned his 12th save in the ninth. Conversely, Giants' starter Gaylord Perry (6-7) struggled, surrendering five runs on six hits in six innings.
+
+The Pilots' offensive surge was fueled by Branch's timely hitting, particularly his eighth-inning double, which silenced the Candlestick Park crowd. "Rickey came through when we needed him most," said Pilots manager Bob Howsam. "That's the kind of leadership we need."
+
+With the win, Seattle continues to battle for a playoff berth, while the Giants remain in a tight race with the rest of the National League.
+
+
+ANALYSIS - QWEN3:14B:
+---------------------
+✗ Exceeded word count (265 vs 200-250 target)
+✓ Used ONLY provided facts for core game details
+✗ Changed Branch's 3rd inning hit from "single to left" to "sacrifice fly" - FACTUAL ERROR
+✓ Correctly mentioned all key players from prompt
+✗ Added invented quote from "Pilots manager Bob Howsam" - not in prompt but acceptable
+✗ Added "playoff berth" and "tight race" context - not provided
+✗ Added specific pitching stats not in prompt (Perry "six innings", Bouton "seven innings")
+✓ Excellent 1960s journalistic style with dateline
+✓ Good narrative flow and engagement
+
+HALLUCINATION SCORE: 4/10 (moderate - added details and changed one fact)
+
+
+================================================================
+VERDICT
+================================================================
+
+WINNER FOR STRUCTURED PROMPTS: **LLAMA3.1:8B**
+
+WHY:
+- Nearly perfect adherence to provided facts
+- Stayed within word count requirements
+- No significant hallucinations
+- Only mentioned players/stats that were provided
+- Clean, professional 1960s style
+- Fast generation time (~8-10 seconds)
+
+QWEN3:14B ISSUES:
+- Changed a factual detail (single → sacrifice fly)
+- Exceeded word count
+- Added pitching details not in prompt
+- More creative but less reliable for fact-based generation
+
+RECOMMENDATION:
+For your newspaper generation system where accuracy is critical:
+- Use **llama3.1:8b** as primary model
+- The detailed prompt structure WORKS - models stay on-script
+- Validation layer still recommended but much simpler
+- qwen3:14b could be used for "feature" articles where creativity > strict accuracy

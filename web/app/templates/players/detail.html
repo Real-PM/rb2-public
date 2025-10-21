@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% from '_macros/breadcrumbs.html' import breadcrumbs %}
+
+{% block title %}{{ player.display_name }} - RB2 Baseball{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Breadcrumb Navigation -->
+    {{ breadcrumbs([
+        ('Home', url_for('main.index')),
+        ('Players', url_for('players.players_list')),
+        (player.last_name[0], url_for('players.players_by_letter', letter=player.last_name[0])),
+        (player.display_name, None)
+    ]) }}
+
+    <!-- Player Header -->
+    <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
+        <div class="flex items-start gap-6 mb-6">
+            <!-- Player Image -->
+            <div class="flex-shrink-0">
+                <!-- Images are 90x135px (2:3 aspect ratio), display at natural size -->
+                <img src="{{ url_for('players.player_image', player_id=player.player_id) }}"
+                     alt="{{ player.full_name }}"
+                     class="w-[90px] h-[135px] rounded-lg border-2 border-gray-300"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <!-- Fallback if image doesn't exist -->
+                <div class="w-[90px] h-[135px] rounded-lg bg-gray-200 border-2 border-gray-300 flex items-center justify-center hidden">
+                    <span class="text-4xl font-bold text-gray-400">{{ player.first_name[0] }}{{ player.last_name[0] }}</span>
+                </div>
+            </div>
+
+            <!-- Player Info -->
+            <div class="flex-grow">
+                <h1 class="text-4xl font-bold text-gray-900 mb-2">{{ player.full_name }}</h1>
+                <div class="flex items-center gap-3">
+                    <p class="text-xl text-gray-600">
+                        {% if player.current_status %}
+                            {% if player.current_status.retired %}
+                                <span class="font-semibold text-red-600">Retired</span> |
+                            {% endif %}
+                            {{ player.current_status.position_display }} |
+                            {% if player.current_status.team %}
+                                <a href="{{ url_for('teams.team_detail', team_id=player.current_status.team.team_id) }}"
+                                   class="text-blue-600 hover:text-blue-800">
+                                    {{ player.current_status.team.name }}{% if player.current_status.team.nickname %} {{ player.current_status.team.nickname }}{% endif %}
+                                </a>
+                            {% else %}
+                                Free Agent
+                            {% endif %}
+                        {% endif %}
+                    </p>
+                    <!-- Team Logo (only for non-free agents) -->
+                    {% if player.current_status and player.current_status.team and player.current_status.team.logo_file_name %}
+                        <img src="{{ url_for('teams.team_logo', team_id=player.current_status.team.team_id) }}"
+                             alt="{{ player.current_status.team.name }}"
+                             class="h-8 w-8 object-contain"
+                             onerror="this.style.display='none';">
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Player ID Badge -->
+            <div class="flex-shrink-0 text-right">
+                <p class="text-sm text-gray-500">Player ID</p>
+                <p class="text-2xl font-mono font-bold text-gray-700">#{{ player.player_id }}</p>
+            </div>
+        </div>
+
+        <!-- Bio Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-6 border-t border-gray-200">
+            <div>
+                <p class="text-sm text-gray-500">Age</p>
+                <p class="font-semibold">{{ player.age if player.age else 'Unknown' }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500">Bats / Throws</p>
+                <p class="font-semibold">{{ player.bats_display }} / {{ player.throws_display }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500">Height / Weight</p>
+                <p class="font-semibold">
+                    {% if player.height_display %}{{ player.height_display }}{% endif %}
+                    {% if player.weight %} / {{ player.weight }} lbs{% endif %}
+                </p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500">Born</p>
+                <p class="font-semibold">{{ player.birthplace_display }}</p>
+            </div>
+        </div>
+
+        {% if player.draft_year %}
+            <div class="mt-4 pt-4 border-t border-gray-200">
+                <p class="text-sm text-gray-500">Draft</p>
+                <p class="font-semibold">
+                    {{ player.draft_year }} - Round {{ player.draft_round if player.draft_round else '?' }},
+                    Pick {{ player.draft_overall_pick if player.draft_overall_pick else '?' }}
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Ratings Section -->
+    {% if player.batting_ratings or player.pitching_ratings or player.fielding_ratings %}
+        <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Current Ratings</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Batting Ratings -->
+                {% if player.batting_ratings %}
+                    <div>
+                        <h3 class="font-semibold text-lg text-gray-800 mb-3">Batting</h3>
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Contact:</span>
+                                <span class="font-semibold">{{ player.batting_ratings.contact_grade }}/80</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Power:</span>
+                                <span class="font-semibold">{{ player.batting_ratings.power_grade }}/80</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Eye:</span>
+                                <span class="font-semibold">{{ player.batting_ratings.eye_grade }}/80</span>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Pitching Ratings -->
+                {% if player.pitching_ratings %}
+                    <div>
+                        <h3 class="font-semibold text-lg text-gray-800 mb-3">Pitching</h3>
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Stuff:</span>
+                                <span class="font-semibold">{{ player.pitching_ratings.stuff_grade }}/80</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Control:</span>
+                                <span class="font-semibold">{{ player.pitching_ratings.control_grade }}/80</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Movement:</span>
+                                <span class="font-semibold">{{ player.pitching_ratings.movement_grade }}/80</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Role:</span>
+                                <span class="font-semibold">{{ 'Starter' if player.pitching_ratings.is_starter else 'Reliever' }}</span>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Fielding Ratings -->
+                {% if player.fielding_ratings %}
+                    <div>
+                        <h3 class="font-semibold text-lg text-gray-800 mb-3">Fielding</h3>
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Primary Position:</span>
+                                <span class="font-semibold">{{ player.fielding_ratings.primary_position or 'N/A' }}</span>
+                            </div>
+                            {% if player.fielding_ratings.is_versatile %}
+                                <div class="text-sm text-blue-600">
+                                    ✓ Versatile (3+ positions)
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Major League Batting Stats -->
+    {% if batting_data_major and batting_data_major.yearly_stats %}
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">Major League Batting Stats</h2>
+            {% set yearly_stats = batting_data_major.yearly_stats %}
+            {% set career_totals = batting_data_major.career_totals %}
+            {% include 'players/_batting_stats_table.html' with context %}
+        </div>
+    {% endif %}
+
+    <!-- Minor League Batting Stats -->
+    {% if batting_data_minor and batting_data_minor.yearly_stats %}
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">Minor League Batting Stats</h2>
+            {% set yearly_stats = batting_data_minor.yearly_stats %}
+            {% set career_totals = batting_data_minor.career_totals %}
+            {% include 'players/_batting_stats_table.html' with context %}
+        </div>
+    {% endif %}
+
+    <!-- Major League Pitching Stats -->
+    {% if pitching_data_major and pitching_data_major.yearly_stats %}
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">Major League Pitching Stats</h2>
+            {% set yearly_stats = pitching_data_major.yearly_stats %}
+            {% set career_totals = pitching_data_major.career_totals %}
+            {% include 'players/_pitching_stats_table.html' with context %}
+        </div>
+    {% endif %}
+
+    <!-- Minor League Pitching Stats -->
+    {% if pitching_data_minor and pitching_data_minor.yearly_stats %}
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">Minor League Pitching Stats</h2>
+            {% set yearly_stats = pitching_data_minor.yearly_stats %}
+            {% set career_totals = pitching_data_minor.career_totals %}
+            {% include 'players/_pitching_stats_table.html' with context %}
+        </div>
+    {% endif %}
+
+    <!-- Trade History Timeline -->
+    {% include 'players/_trade_history.html' with context %}
+
+    <!-- Player News & Highlights -->
+    {% include 'players/_player_news.html' with context %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/table-sort.js') }}"></script>
+<script>
+    // Initialize table sorters when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        // Standard batting stats table
+        if (document.getElementById('batting-stats-table')) {
+            new TableSorter('batting-stats-table', {
+                defaultColumn: 0,  // Year column
+                defaultDirection: 'asc'  // Ascending (oldest to newest)
+            });
+        }
+
+        // Advanced batting stats table
+        if (document.getElementById('advanced-batting-stats-table')) {
+            new TableSorter('advanced-batting-stats-table', {
+                defaultColumn: 0,  // Year column
+                defaultDirection: 'asc'  // Ascending (oldest to newest)
+            });
+        }
+
+        // Pitching stats table
+        if (document.getElementById('pitching-stats-table')) {
+            new TableSorter('pitching-stats-table', {
+                defaultColumn: 0,  // Year column
+                defaultDirection: 'asc'  // Ascending (oldest to newest)
+            });
+        }
+    });
+</script>
+{% endblock %}

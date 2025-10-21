@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Branch Baseball Encyclopedia{% endblock %}</title>
+
+    <!-- Tailwind CSS CDN for quick styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'forest': {
+                            DEFAULT: '#1B4D3E',
+                            dark: '#163D31',
+                            light: '#2A6B54',
+                        },
+                        'cream': '#F5F1E8',
+                        'tan': '#E8DCC4',
+                        'leather': {
+                            DEFAULT: '#8B4513',
+                            dark: '#6B3410',
+                        },
+                        'field': '#2D5F4A',
+                        'vintage-gold': '#B8860B',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-cream">
+    <!-- Navigation -->
+    <nav class="bg-forest text-cream shadow-lg">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <!-- Left: Logo and Desktop Nav -->
+                <div class="flex items-center space-x-8">
+                    <a href="{{ url_for('main.index') }}" class="flex items-center gap-3 group">
+                        <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Branch Baseball" class="h-10 w-10 transition-transform group-hover:scale-110">
+                        <span class="text-xl logo-text text-cream group-hover:text-vintage-gold transition-colors">BRANCH BASEBALL<br><span class="text-xs tracking-wider opacity-90">ENCYCLOPEDIA</span></span>
+                    </a>
+                    <!-- Desktop Navigation -->
+                    <div class="hidden md:flex space-x-4">
+                        <a href="{{ url_for('main.index') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded">Home</a>
+                        <a href="{{ url_for('newspaper.index') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded">Newspaper</a>
+                        <a href="{{ url_for('leagues.leagues_index') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded">Leagues</a>
+                        <a href="{{ url_for('teams.teams_list') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded">Teams</a>
+                        <a href="{{ url_for('players.players_list') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded">Players</a>
+                        <a href="{{ url_for('coaches.coach_list') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded">Coaches</a>
+                        <!-- Leaderboards Mega Dropdown -->
+                        <div class="relative" id="leaderboards-dropdown">
+                            <button id="leaderboards-button" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded inline-flex items-center">
+                                Leaderboards
+                                <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <!-- Mega Dropdown Menu -->
+                            <div id="leaderboards-menu" class="hidden absolute left-0 mt-2 w-screen max-w-4xl bg-cream rounded-lg shadow-xl z-50 border border-leather">
+                                <div class="grid grid-cols-3 gap-6 p-6">
+                                    <!-- Column 1: Batting Leaders -->
+                                    <div>
+                                        <h3 class="text-sm font-bold text-forest uppercase mb-3 border-b border-leather pb-2">Batting Leaders</h3>
+                                        <div class="space-y-1.5">
+                                            <a href="{{ url_for('leaderboards.batting', type='career', stat='hr') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Home Runs</a>
+                                            <a href="{{ url_for('leaderboards.batting', type='career', stat='avg') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Batting Average</a>
+                                            <a href="{{ url_for('leaderboards.batting', type='career', stat='rbi') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">RBI</a>
+                                            <a href="{{ url_for('leaderboards.batting', type='career', stat='sb') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Stolen Bases</a>
+                                            <a href="{{ url_for('leaderboards.batting', type='career', stat='h') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Hits</a>
+                                            <a href="{{ url_for('leaderboards.batting', type='career', stat='obp') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">On-Base Percentage</a>
+                                            <a href="{{ url_for('leaderboards.batting', type='career', stat='slg') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Slugging Percentage</a>
+                                            <a href="{{ url_for('leaderboards.batting', type='career', stat='war') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">WAR</a>
+                                        </div>
+                                    </div>
+
+                                    <!-- Column 2: Pitching Leaders -->
+                                    <div>
+                                        <h3 class="text-sm font-bold text-forest uppercase mb-3 border-b border-leather pb-2">Pitching Leaders</h3>
+                                        <div class="space-y-1.5">
+                                            <a href="{{ url_for('leaderboards.pitching', type='career', stat='w') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Wins</a>
+                                            <a href="{{ url_for('leaderboards.pitching', type='career', stat='sv') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Saves</a>
+                                            <a href="{{ url_for('leaderboards.pitching', type='career', stat='so') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Strikeouts</a>
+                                            <a href="{{ url_for('leaderboards.pitching', type='career', stat='era') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">ERA</a>
+                                            <a href="{{ url_for('leaderboards.pitching', type='career', stat='whip') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">WHIP</a>
+                                            <a href="{{ url_for('leaderboards.pitching', type='career', stat='k_per_9') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Strikeouts per 9</a>
+                                            <a href="{{ url_for('leaderboards.pitching', type='career', stat='war') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">WAR</a>
+                                        </div>
+                                    </div>
+
+                                    <!-- Column 3: Quick Links & Types -->
+                                    <div>
+                                        <h3 class="text-sm font-bold text-forest uppercase mb-3 border-b border-leather pb-2">Quick Links</h3>
+                                        <div class="space-y-1.5 mb-4">
+                                            <a href="{{ url_for('leaderboards.home') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded font-medium">Leaderboards Home</a>
+                                            <a href="{{ url_for('leaderboards.yearly') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded font-medium">Current Year Leaders</a>
+                                        </div>
+
+                                        <h3 class="text-sm font-bold text-forest uppercase mb-3 border-b border-leather pb-2 mt-4">Leaderboard Types</h3>
+                                        <div class="space-y-1.5">
+                                            <a href="{{ url_for('leaderboards.batting', type='career', stat='hr') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Career Leaders</a>
+                                            <a href="{{ url_for('leaderboards.batting', type='active', stat='hr') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Active Player Leaders</a>
+                                            <a href="{{ url_for('leaderboards.batting', type='single-season', stat='hr') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Single-Season Records</a>
+                                            <a href="{{ url_for('leaderboards.yearly') }}" class="block text-sm text-gray-700 hover:text-forest hover:bg-tan px-2 py-1.5 rounded">Yearly League Leaders</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Search and Mobile Menu Button -->
+                <div class="flex items-center space-x-4">
+                    <!-- Search bar (desktop only) -->
+                    <div class="hidden md:block relative">
+                        <form action="{{ url_for('search.search_results') }}" method="get" class="relative" id="search-form">
+                            <input type="text"
+                                   name="q"
+                                   id="search-input"
+                                   placeholder="Search players, teams..."
+                                   autocomplete="off"
+                                   class="px-4 py-2 w-64 rounded bg-forest-dark text-cream placeholder-tan focus:outline-none focus:ring-2 focus:ring-vintage-gold">
+                            <!-- Autocomplete dropdown -->
+                            <div id="search-results"
+                                 class="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg max-h-96 overflow-y-auto hidden z-50">
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Mobile menu button -->
+                    <button id="mobile-menu-button" class="md:hidden inline-flex items-center justify-center p-2 rounded-md hover:bg-forest-dark focus:outline-none focus:ring-2 focus:ring-inset focus:ring-cream">
+                        <span class="sr-only">Open main menu</span>
+                        <!-- Hamburger icon -->
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" id="menu-icon">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                        <!-- Close icon (hidden by default) -->
+                        <svg class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" id="close-icon">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mobile menu (hidden by default) -->
+            <div id="mobile-menu" class="hidden md:hidden pb-4">
+                <div class="flex flex-col space-y-2">
+                    <a href="{{ url_for('main.index') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded block">Home</a>
+                    <a href="{{ url_for('leagues.leagues_index') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded block">Leagues</a>
+                    <a href="{{ url_for('teams.teams_list') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded block">Teams</a>
+                    <a href="{{ url_for('players.players_list') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded block">Players</a>
+                    <a href="{{ url_for('coaches.coach_list') }}" class="hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded block">Coaches</a>
+
+                    <!-- Mobile Leaderboards Accordion -->
+                    <div>
+                        <button id="mobile-leaderboards-toggle" class="w-full text-left hover:bg-forest-dark hover:text-vintage-gold px-3 py-2 rounded flex items-center justify-between">
+                            <span>Leaderboards</span>
+                            <svg class="h-4 w-4 transform transition-transform" id="mobile-lb-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        <div id="mobile-leaderboards-menu" class="hidden pl-4 mt-2 space-y-1">
+                            <a href="{{ url_for('leaderboards.home') }}" class="block text-sm hover:bg-forest-dark hover:text-vintage-gold px-3 py-1.5 rounded">Home</a>
+                            <a href="{{ url_for('leaderboards.yearly') }}" class="block text-sm hover:bg-forest-dark hover:text-vintage-gold px-3 py-1.5 rounded">Current Year</a>
+                            <a href="{{ url_for('leaderboards.batting', type='career', stat='hr') }}" class="block text-sm hover:bg-forest-dark hover:text-vintage-gold px-3 py-1.5 rounded">Career</a>
+                            <a href="{{ url_for('leaderboards.batting', type='active', stat='hr') }}" class="block text-sm hover:bg-forest-dark hover:text-vintage-gold px-3 py-1.5 rounded">Active</a>
+                            <a href="{{ url_for('leaderboards.batting', type='single-season', stat='hr') }}" class="block text-sm hover:bg-forest-dark hover:text-vintage-gold px-3 py-1.5 rounded">Single-Season</a>
+                        </div>
+                    </div>
+
+                    <!-- Mobile search -->
+                    <div class="pt-2">
+                        <form action="{{ url_for('search.search_results') }}" method="get">
+                            <input type="text"
+                                   name="q"
+                                   placeholder="Search players, teams..."
+                                   class="w-full px-4 py-2 rounded bg-forest-dark text-cream placeholder-tan focus:outline-none focus:ring-2 focus:ring-vintage-gold">
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Game Date Display -->
+    {% if current_game_date %}
+    <div class="bg-gradient-to-r from-gray-100 to-gray-200 border-b border-gray-300 py-2.5 shadow-sm">
+        <div class="container mx-auto px-4 flex items-center justify-center">
+            <svg class="w-5 h-5 text-gray-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <span class="text-sm font-medium text-gray-700">
+                Current Date: <strong class="text-gray-900">{{ current_game_date.strftime('%B %d, %Y') }}</strong>
+            </span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="container mx-auto px-4 mt-4">
+                {% for category, message in messages %}
+                    <div class="bg-{{ category }}-100 border border-{{ category }}-400 text-{{ category }}-700 px-4 py-3 rounded relative mb-4" role="alert">
+                        <span class="block sm:inline">{{ message }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main content -->
+    <main class="container mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-forest-dark text-tan mt-12 border-t-4 border-leather">
+        <div class="container mx-auto px-4 py-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <!-- About Section -->
+                <div>
+                    <h3 class="text-cream font-bold mb-3 text-lg">Branch Baseball Encyclopedia</h3>
+                    <p class="text-sm leading-relaxed">
+                        A comprehensive baseball reference database generated from an OOTP (Out of the Park Baseball) simulation,
+                        chronicling the legendary Branch family dynasty and the alternate baseball universe they inhabit.
+                    </p>
+                </div>
+
+                <!-- Quick Links -->
+                <div>
+                    <h3 class="text-cream font-bold mb-3 text-lg">Quick Links</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li><a href="{{ url_for('main.index') }}" class="hover:text-vintage-gold transition-colors">Home</a></li>
+                        <li><a href="{{ url_for('players.players_list') }}" class="hover:text-vintage-gold transition-colors">Players</a></li>
+                        <li><a href="{{ url_for('teams.teams_list') }}" class="hover:text-vintage-gold transition-colors">Teams</a></li>
+                        <li><a href="{{ url_for('leaderboards.home') }}" class="hover:text-vintage-gold transition-colors">Leaderboards</a></li>
+                    </ul>
+                </div>
+
+                <!-- Credits -->
+                <div>
+                    <h3 class="text-cream font-bold mb-3 text-lg">Credits</h3>
+                    <p class="text-sm mb-2">Designed & developed by:</p>
+                    <a href="https://realpm.net" target="_blank" rel="noopener" class="text-vintage-gold hover:text-cream font-semibold transition-colors">
+                        Jay Cohen
+                    </a>
+                    <p class="text-xs mt-3 opacity-75">
+                        Built with Flask, PostgreSQL, Tailwind CSS, and Ollama
+                    </p>
+                </div>
+            </div>
+
+            <!-- Bottom Bar -->
+            <div class="border-t border-leather-dark pt-4 text-center text-sm opacity-75">
+                <p>&copy; 2025 Branch Baseball Encyclopedia. All statistics generated from OOTP simulation.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Global Search Autocomplete Script -->
+    <script>
+        (function() {
+            const searchInput = document.getElementById('search-input');
+            const searchResults = document.getElementById('search-results');
+            const searchForm = document.getElementById('search-form');
+            let currentFocus = -1;
+
+            if (!searchInput || !searchResults) return;
+
+            // Debounce function to limit API calls
+            function debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            }
+
+            // Fetch autocomplete results
+            async function fetchResults(query) {
+                if (query.length < 2) {
+                    searchResults.classList.add('hidden');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/search/autocomplete?q=${encodeURIComponent(query)}`);
+                    const data = await response.json();
+                    displayResults(data.results);
+                } catch (error) {
+                    console.error('Search error:', error);
+                    searchResults.classList.add('hidden');
+                }
+            }
+
+            // Display autocomplete results
+            function displayResults(results) {
+                if (!results || results.length === 0) {
+                    searchResults.classList.add('hidden');
+                    return;
+                }
+
+                let html = '';
+                results.forEach((result, index) => {
+                    const iconClass = result.type === 'player' ? '👤' : '🏟️';
+                    html += `
+                        <a href="${result.url}"
+                           class="block px-4 py-3 hover:bg-gray-100 border-b border-gray-200 last:border-0 search-result-item"
+                           data-index="${index}">
+                            <div class="flex items-start">
+                                <span class="mr-3 text-xl">${iconClass}</span>
+                                <div class="flex-1">
+                                    <div class="font-semibold text-gray-900">${result.name}</div>
+                                    <div class="text-sm text-gray-600">${result.subtitle}</div>
+                                </div>
+                            </div>
+                        </a>
+                    `;
+                });
+
+                searchResults.innerHTML = html;
+                searchResults.classList.remove('hidden');
+                currentFocus = -1;
+            }
+
+            // Handle keyboard navigation
+            function handleKeyDown(e) {
+                const items = searchResults.querySelectorAll('.search-result-item');
+                if (!items.length) return;
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    currentFocus++;
+                    if (currentFocus >= items.length) currentFocus = 0;
+                    setActive(items);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    currentFocus--;
+                    if (currentFocus < 0) currentFocus = items.length - 1;
+                    setActive(items);
+                } else if (e.key === 'Enter') {
+                    if (currentFocus > -1 && items[currentFocus]) {
+                        e.preventDefault();
+                        items[currentFocus].click();
+                    }
+                } else if (e.key === 'Escape') {
+                    searchResults.classList.add('hidden');
+                    currentFocus = -1;
+                }
+            }
+
+            // Set active item in dropdown
+            function setActive(items) {
+                items.forEach((item, index) => {
+                    if (index === currentFocus) {
+                        item.classList.add('bg-gray-100');
+                        item.scrollIntoView({ block: 'nearest' });
+                    } else {
+                        item.classList.remove('bg-gray-100');
+                    }
+                });
+            }
+
+            // Event listeners
+            const debouncedFetch = debounce(fetchResults, 300);
+            searchInput.addEventListener('input', (e) => debouncedFetch(e.target.value));
+            searchInput.addEventListener('keydown', handleKeyDown);
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!searchForm.contains(e.target)) {
+                    searchResults.classList.add('hidden');
+                }
+            });
+
+            // Re-open dropdown when focusing back on input (if there are results)
+            searchInput.addEventListener('focus', () => {
+                if (searchInput.value.length >= 2 && searchResults.innerHTML) {
+                    searchResults.classList.remove('hidden');
+                }
+            });
+        })();
+    </script>
+
+    <!-- Mobile Menu Toggle Script -->
+    <script>
+        (function() {
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+            const menuIcon = document.getElementById('menu-icon');
+            const closeIcon = document.getElementById('close-icon');
+
+            if (mobileMenuButton) {
+                mobileMenuButton.addEventListener('click', function() {
+                    // Toggle menu visibility
+                    mobileMenu.classList.toggle('hidden');
+
+                    // Toggle icons
+                    menuIcon.classList.toggle('hidden');
+                    closeIcon.classList.toggle('hidden');
+                });
+
+                // Close mobile menu when clicking a link
+                const mobileMenuLinks = mobileMenu.querySelectorAll('a');
+                mobileMenuLinks.forEach(link => {
+                    link.addEventListener('click', function() {
+                        mobileMenu.classList.add('hidden');
+                        menuIcon.classList.remove('hidden');
+                        closeIcon.classList.add('hidden');
+                    });
+                });
+            }
+        })();
+    </script>
+
+    <script>
+        // Desktop Leaderboards Mega Dropdown
+        (function() {
+            const dropdown = document.getElementById('leaderboards-dropdown');
+            const button = document.getElementById('leaderboards-button');
+            const menu = document.getElementById('leaderboards-menu');
+            let closeTimeout;
+
+            if (dropdown && button && menu) {
+                // Show on hover (desktop)
+                dropdown.addEventListener('mouseenter', function() {
+                    clearTimeout(closeTimeout);
+                    menu.classList.remove('hidden');
+                });
+
+                // Hide on mouse leave (with small delay)
+                dropdown.addEventListener('mouseleave', function() {
+                    closeTimeout = setTimeout(() => {
+                        menu.classList.add('hidden');
+                    }, 200);
+                });
+
+                // Also toggle on click (for touch devices)
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    menu.classList.toggle('hidden');
+                });
+
+                // Close when clicking outside
+                document.addEventListener('click', function(e) {
+                    if (!dropdown.contains(e.target)) {
+                        menu.classList.add('hidden');
+                    }
+                });
+
+                // Close when clicking a link inside
+                const menuLinks = menu.querySelectorAll('a');
+                menuLinks.forEach(link => {
+                    link.addEventListener('click', function() {
+                        menu.classList.add('hidden');
+                    });
+                });
+            }
+        })();
+
+        // Mobile Leaderboards Accordion
+        (function() {
+            const toggle = document.getElementById('mobile-leaderboards-toggle');
+            const submenu = document.getElementById('mobile-leaderboards-menu');
+            const chevron = document.getElementById('mobile-lb-chevron');
+
+            if (toggle && submenu && chevron) {
+                toggle.addEventListener('click', function() {
+                    submenu.classList.toggle('hidden');
+                    chevron.classList.toggle('rotate-180');
+                });
+            }
+        })();
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

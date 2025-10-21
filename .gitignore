@@ -1,0 +1,13 @@
+etl/__pychache__/
+etl/data/incoming/csv/*
+etl/data/images/league_logos/*
+etl/data/images/players/*
+etl/data/images/team_logos/*
+etl/logs/*
+web/__pycache__/
+web/app/__pycache__/
+web/app/models/__pychache__/
+web/app/routes/__pychache__/
+web/app/services/__pycache__/
+web/app/utils/__pycache__/
+
