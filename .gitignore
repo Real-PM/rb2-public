@@ -10,4 +10,5 @@ web/app/models/__pychache__/
 web/app/routes/__pychache__/
 web/app/services/__pycache__/
 web/app/utils/__pycache__/
-
+*.env
+docs/stage-issues

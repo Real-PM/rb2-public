@@ -386,8 +386,9 @@ CREATE TABLE IF NOT EXISTS messages (
     notify SMALLINT DEFAULT 1,
     ongoing_story_id INTEGER DEFAULT -1,
     text_is_modified SMALLINT DEFAULT 0,
-    body TEXT NOT NULL
+    body TEXT DEFAULT ''
     -- Note: No FK constraint on trade_id - this field contains OOTP internal trade IDs
+    -- Note: body column may be empty - OOTP doesn't always export message body text in CSV
     -- which don't correspond to our auto-generated trade_history.trade_id values.
     -- The proper relationship is: trade_history.message_id -> messages.message_id
 );

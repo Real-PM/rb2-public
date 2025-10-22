@@ -31,8 +31,8 @@ This document outlines the steps to deploy the RB2 Baseball reference website to
 
 **Database:**
 - PostgreSQL 13+ server at 192.168.10.94:5432 ✓
-- Database: `ootp_dev` (or dedicated staging DB if preferred)
-- User: `ootp_etl` with read access ✓
+- Database: `ootp_stage` (dedicated staging database)
+- User: `ootp_etl` with full privileges ✓
 - ETL should have populated all required tables ✓
 
 **Redis:**
@@ -74,7 +74,7 @@ This document outlines the steps to deploy the RB2 Baseball reference website to
 │  Server: 192.168.10.94 (Minotaur)               │
 │  ┌────────────────────────────────────────┐    │
 │  │  PostgreSQL (port 5432)                │    │
-│  │  - ootp_dev database                   │    │
+│  │  - ootp_stage database                 │    │
 │  └────────────────────────────────────────┘    │
 │                                                  │
 │  ┌────────────────────────────────────────┐    │
@@ -86,9 +86,10 @@ This document outlines the steps to deploy the RB2 Baseball reference website to
 │                                                  │
 │  ┌────────────────────────────────────────┐    │
 │  │  RB2 Flask App (port 5002)             │    │
-│  │  - Virtual env: /opt/rb2/venv          │    │
+│  │  - Virtual env: /opt/rb2-public-public/venv   │    │
 │  │  - systemd service: rb2-staging        │    │
-│  │  - Working dir: /opt/rb2/web           │    │
+│  │  - Working dir: /opt/rb2-public-public/web    │    │
+│  │  - WSGI server: gunicorn               │    │
 │  └────────────────────────────────────────┘    │
 │                                                  │
 │  ┌────────────────────────────────────────┐    │
@@ -270,19 +271,19 @@ curl http://stage.rickybranch.com
 ssh jayco@192.168.10.94
 
 # Create application directory
-sudo mkdir -p /opt/rb2
-sudo chown jayco:jayco /opt/rb2
+sudo mkdir -p /opt/rb2-public
+sudo chown jayco:jayco /opt/rb2-public
 
 # Optional: Create dedicated user for running app
-# sudo useradd -r -s /bin/bash -d /opt/rb2 rb2app
-# sudo chown rb2app:rb2app /opt/rb2
+# sudo useradd -r -s /bin/bash -d /opt/rb2-public rb2app
+# sudo chown rb2app:rb2app /opt/rb2-public
 # For now, we'll use jayco user for simplicity
 ```
 
 ### 2. Clone Repository
 
 ```bash
-cd /opt/rb2
+cd /opt/rb2-public
 
 # Clone from development machine
 git clone /mnt/hdd/PycharmProjects/rb2 .
@@ -297,7 +298,7 @@ git checkout v1.0
 ### 3. Create Python Virtual Environment
 
 ```bash
-cd /opt/rb2
+cd /opt/rb2-public
 
 # Create virtual environment
 python3 -m venv venv
@@ -309,7 +310,7 @@ source venv/bin/activate
 pip install --upgrade pip
 
 # Install dependencies
-pip install -r web/requirements.txt
+pip install -r web/web_requirements.txt
 
 # Verify critical packages
 pip list | grep -E "(Flask|SQLAlchemy|redis|psycopg2)"
@@ -325,13 +326,13 @@ pip list | grep -E "(Flask|SQLAlchemy|redis|psycopg2)"
 ### 4. Configure Application
 
 ```bash
-cd /opt/rb2/web
+cd /opt/rb2-public/web
 
 # Create .env file for staging
 cat > .env << 'EOF'
 FLASK_ENV=staging
 FLASK_CONFIG=staging
-DATABASE_URL=postgresql://ootp_etl:d0ghouse@localhost:5432/ootp_dev
+DATABASE_URL=postgresql://ootp_etl:d0ghouse@localhost:5432/ootp_stage
 REDIS_URL=redis://localhost:6379/1
 SECRET_KEY=your-staging-secret-key-change-this-to-random-string
 EOF
@@ -349,7 +350,7 @@ Since we're on the same server, we can use `localhost` for connections.
 ### 5. Test Application Manually
 
 ```bash
-cd /opt/rb2/web
+cd /opt/rb2-public/web
 source ../venv/bin/activate
 
 # Test run (dev mode on port 5002)
@@ -363,7 +364,7 @@ FLASK_RUN_PORT=5002 python run.py
 - Application starts without errors
 - Can connect to database
 - Can connect to Redis
-- Images serve correctly from `/opt/rb2/etl/data/images/`
+- Images serve correctly from `/opt/rb2-public/etl/data/images/`
 - Front page loads
 - Check URLs like:
   - http://localhost:5002/
@@ -387,19 +388,40 @@ Description=RB2 Baseball Reference Website (Staging)
 After=network.target postgresql.service redis.service
 
 [Service]
-Type=simple
+Type=notify
 User=jayco
 Group=jayco
-WorkingDirectory=/opt/rb2/web
-Environment="PATH=/opt/rb2/venv/bin"
+WorkingDirectory=/opt/rb2-public-public/web
+Environment="PATH=/opt/rb2-public-public/venv/bin"
 Environment="FLASK_ENV=staging"
 Environment="FLASK_CONFIG=staging"
-Environment="FLASK_RUN_PORT=5002"
-ExecStart=/opt/rb2/venv/bin/python /opt/rb2/web/run.py
+
+# Gunicorn configuration
+# --bind: Listen on localhost:5002
+# --workers: Number of worker processes (2-4 x CPU cores recommended)
+# --worker-class: Use sync workers (default, good for Flask)
+# --timeout: Request timeout in seconds
+# --access-logfile: Access log location (- for stdout/journald)
+# --error-logfile: Error log location (- for stderr/journald)
+# --log-level: Logging level
+ExecStart=/opt/rb2-public-public/venv/bin/gunicorn \
+    --bind 127.0.0.1:5002 \
+    --workers 4 \
+    --worker-class sync \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
+    --log-level info \
+    --access-logformat '%({x-forwarded-for}i)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s' \
+    'run:app'
 
 # Restart policy
 Restart=on-failure
 RestartSec=10
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
 
 # Logging
 StandardOutput=journal
@@ -496,7 +518,7 @@ docker ps | grep caddy
 
 ```bash
 # PostgreSQL
-psql -h localhost -U ootp_etl -d ootp_dev -c "SELECT COUNT(*) FROM players_core;"
+psql -h localhost -U ootp_etl -d ootp_stage -c "SELECT COUNT(*) FROM players_core;"
 
 # Redis
 redis-cli -n 1 PING
@@ -623,7 +645,7 @@ docker logs hosting-caddy-1 -f
 htop
 
 # Check disk usage (especially /etl/data/images)
-du -sh /opt/rb2/etl/data/images/
+du -sh /opt/rb2-public/etl/data/images/
 
 # Check Redis memory
 redis-cli -n 1 INFO memory
@@ -641,18 +663,18 @@ sudo journalctl -u rb2-staging -n 50
 
 # Common issues:
 # 1. Database connection
-psql -h localhost -U ootp_etl -d ootp_dev -c "SELECT 1;"
+psql -h localhost -U ootp_etl -d ootp_stage -c "SELECT 1;"
 
 # 2. Redis connection
 redis-cli -n 1 PING
 
 # 3. Virtual environment
-/opt/rb2/venv/bin/python --version
-/opt/rb2/venv/bin/pip list | grep Flask
+/opt/rb2-public/venv/bin/python --version
+/opt/rb2-public/venv/bin/pip list | grep Flask
 
 # 4. Permissions
-ls -la /opt/rb2/web/
-ls -la /opt/rb2/etl/data/images/
+ls -la /opt/rb2-public/web/
+ls -la /opt/rb2-public/etl/data/images/
 
 # 5. Port conflict
 sudo netstat -tlnp | grep 5002
@@ -697,16 +719,16 @@ sudo journalctl -u rb2-staging -f
 
 ```bash
 # Verify image directory exists
-ls -la /opt/rb2/etl/data/images/players/ | head
+ls -la /opt/rb2-public/etl/data/images/players/ | head
 
 # Check Flask routes
 curl -I http://localhost:5002/players/image/12345
 
 # Check permissions
-sudo chmod -R 755 /opt/rb2/etl/data/images/
+sudo chmod -R 755 /opt/rb2-public/etl/data/images/
 
 # Verify image path in config
-grep -r "image" /opt/rb2/web/app/config.py
+grep -r "image" /opt/rb2-public/web/app/config.py
 ```
 
 ### SSL/TLS Issues (Domain-Based Access)
@@ -734,12 +756,12 @@ If deployment fails:
 sudo systemctl stop rb2-staging
 
 # Rollback code
-cd /opt/rb2
+cd /opt/rb2-public
 git checkout previous-version  # Or specific commit/tag
 
 # Reinstall dependencies (if needed)
 source venv/bin/activate
-pip install -r web/requirements.txt
+pip install -r web/web_requirements.txt
 
 # Restart service
 sudo systemctl start rb2-staging
@@ -880,10 +902,10 @@ After successful staging validation:
 ### Update Application
 
 ```bash
-cd /opt/rb2
+cd /opt/rb2-public
 git pull
 source venv/bin/activate
-pip install -r web/requirements.txt
+pip install -r web/web_requirements.txt
 sudo systemctl restart rb2-staging
 sudo journalctl -u rb2-staging -f
 ```
@@ -895,7 +917,7 @@ sudo journalctl -u rb2-staging -f
 redis-cli -n 1 FLUSHDB
 
 # Or programmatically via Flask shell
-cd /opt/rb2/web
+cd /opt/rb2-public/web
 source ../venv/bin/activate
 python -c "from app import create_app; app = create_app('staging'); with app.app_context(): app.extensions['cache'].clear()"
 ```

@@ -87,7 +87,7 @@ CREATE TABLE league_history_batting_stats (
     iso DECIMAL(6,4),
     woba DECIMAL(6,4),
     ops DECIMAL(6,4),
-    sbp DECIMAL(8,4),
+    sbp DECIMAL(5,2),  -- Changed to percentage format (0.00 to 100.00)
     kp DECIMAL(6,4),
     bbp DECIMAL(6,4),
     wpa DECIMAL(10,3),
@@ -262,11 +262,11 @@ CREATE TABLE team_history_batting_stats (
     obp DECIMAL(5,4),
     slg DECIMAL(5,4),
     rc DECIMAL(8,4),
-    rc27 DECIMAL(6,4),
+    rc27 DECIMAL(7,4),  -- Increased to allow values up to 999.9999 (rare but possible)
     iso DECIMAL(5,4),
     woba DECIMAL(5,4),
     ops DECIMAL(5,4),
-    sbp DECIMAL(6,4),
+    sbp DECIMAL(5,2),  -- Changed to percentage format (0.00 to 100.00)
     PRIMARY KEY (team_id, year),
     FOREIGN KEY (team_id) REFERENCES teams(team_id),
     FOREIGN KEY (league_id) REFERENCES leagues(league_id)

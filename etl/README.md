@@ -176,6 +176,9 @@ The `.env` file contains all configuration for the ETL pipeline. **Never commit 
 #### Required Variables
 
 ```bash
+# Environment Selection
+FLASK_ENV=dev                # Options: 'dev' or 'staging' - determines which database to use
+
 # Local Paths
 OOTP_GAME_DATA_PATH=/home/jayco/hdd/PycharmProjects/rb2/etl/data/incoming
 OOTP_IMAGES_PATH=/home/jayco/hdd/PycharmProjects/rb2/etl/data/images/players
@@ -201,10 +204,12 @@ OOTP_REMOTE_PICTURES_PATH="/path/to/OOTP Baseball 25/saved_games/Your Game Name.
 
 #### Important Notes
 
+- **FLASK_ENV**: Set to `dev` for development or `staging` for staging environment. This determines which database the ETL will connect to.
 - Update `OOTP_GAME_NAME` to match your actual game save name
 - Update all paths with `"Your Game Name.lg"` to use your actual game name
 - Ensure the database user has appropriate permissions
 - For Mac paths, use the full Container path as shown in the example
+- **Staging deployments**: Set `FLASK_ENV=staging` and use `localhost` for DB_HOST when running on the same server as the database
 
 ### Python Configuration (config/etl_config.py)
 
