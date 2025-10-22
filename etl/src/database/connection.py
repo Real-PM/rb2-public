@@ -11,7 +11,10 @@ load_dotenv()
 
 class DatabaseConnection:
     """Manager PostgreSQL database connections"""
-    def __init__(self, environment='dev'):
+    def __init__(self, environment=None):
+        # Use environment variable if not explicitly provided
+        if environment is None:
+            environment = os.getenv('FLASK_ENV', 'dev')
         self.environment = environment
         self.engine = None
         self.SessionLocal = None
@@ -36,7 +39,7 @@ class DatabaseConnection:
 
         # Build connection string
         connection_string = f"postgresql://{user}:{password}@{host}:{port}/{database}"
-        logger.info(f"Connecting to database at {host}:{port}, database: {database}")
+        logger.info(f"Connecting to {self.environment} database at {host}:{port}, database: {database}")
 
         try:
             self.engine = create_engine(
