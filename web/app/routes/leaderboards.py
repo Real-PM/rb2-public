@@ -1,12 +1,14 @@
 """Leaderboards routes"""
 from flask import Blueprint, render_template, request
 from app.services import leaderboard_service
+from app.extensions import cache
 
 bp = Blueprint('leaderboards', __name__)
 
 
 @bp.route('/')
 @bp.route('/home')
+@cache.cached(timeout=600, key_prefix='leaderboards_home')
 def home():
     """Leaderboard home page with current year leaders and all-time records."""
     # Get current year (most recent year with data)
@@ -50,6 +52,7 @@ def home():
 
 
 @bp.route('/batting')
+@cache.cached(timeout=600, query_string=True)
 def batting():
     """Batting leaderboards with filtering.
 
@@ -135,6 +138,7 @@ def batting():
 
 
 @bp.route('/pitching')
+@cache.cached(timeout=600, query_string=True)
 def pitching():
     """Pitching leaderboards with filtering.
 
@@ -220,6 +224,7 @@ def pitching():
 
 
 @bp.route('/yearly')
+@cache.cached(timeout=600, query_string=True)
 def yearly():
     """Yearly league leaders page showing top 10 for all stats.
 

@@ -12,3 +12,4 @@ web/app/services/__pycache__/
 web/app/utils/__pycache__/
 *.env
 docs/stage-issues
+.mcp.json

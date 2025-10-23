@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, abort, send_file
 from app.models import Player, PlayerCurrentStatus, PlayerBattingStats, PlayerPitchingStats
 from app.services import player_service
 from sqlalchemy import desc, func, and_
-from app.extensions import db
+from app.extensions import db, cache
 import string
 import os
 
@@ -11,6 +11,7 @@ bp = Blueprint('players', __name__)
 
 
 @bp.route('/')
+@cache.cached(timeout=600, key_prefix='players_list')
 def players_list():
     """Players home page - alphabetical layout with notable players by letter.
 
@@ -61,6 +62,7 @@ def players_list():
 
 
 @bp.route('/letter/<letter>')
+@cache.cached(timeout=600, make_cache_key=lambda: f'players_letter_{letter}')
 def players_by_letter(letter):
     """Show all players whose last name starts with the given letter.
 
@@ -106,6 +108,7 @@ def players_by_letter(letter):
 
 
 @bp.route('/<int:player_id>')
+@cache.cached(timeout=600, make_cache_key=lambda: f'player_detail_{player_id}')
 def player_detail(player_id):
     """Player detail page - bio, stats, ratings
 

@@ -2,12 +2,14 @@
 from flask import Blueprint, render_template, abort, send_file
 from app.models import League
 from app.services import league_service, leaderboard_service
+from app.extensions import cache
 import os
 
 bp = Blueprint('leagues', __name__)
 
 
 @bp.route('/')
+@cache.cached(timeout=600, key_prefix='leagues_index')
 def leagues_index():
     """Leagues index page - list all top-level leagues.
 
@@ -20,6 +22,7 @@ def leagues_index():
 
 
 @bp.route('/<int:league_id>')
+@cache.cached(timeout=600, make_cache_key=lambda: f'league_home_{league_id}')
 def league_home(league_id):
     """League home page showing current standings, leaders, and team stats.
 
@@ -76,6 +79,7 @@ def league_home(league_id):
 
 
 @bp.route('/years/<int:year>')
+@cache.cached(timeout=600, make_cache_key=lambda: f'year_summary_{year}')
 def year_summary(year):
     """Year summary page showing results, leaders, and awards for a season.
 

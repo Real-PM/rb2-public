@@ -1,7 +1,7 @@
 """Team routes"""
 from flask import Blueprint, render_template, abort, send_file
 from app.models import Team, TeamRecord, Player, PlayerCurrentStatus, League, Park
-from app.extensions import db
+from app.extensions import db, cache
 import os
 from app.services.team_service import (
     get_team_year_data,
@@ -19,6 +19,7 @@ bp = Blueprint('teams', __name__)
 
 
 @bp.route('/')
+@cache.cached(timeout=600, key_prefix='teams_list')
 def teams_list():
     """List all teams"""
     # Get all MLB teams (level=1) with their records
@@ -32,6 +33,7 @@ def teams_list():
 
 
 @bp.route('/<int:team_id>')
+@cache.cached(timeout=600, make_cache_key=lambda: f'team_detail_{team_id}')
 def team_detail(team_id):
     """Team detail page - roster, stats, schedule
 
@@ -122,6 +124,7 @@ def team_detail(team_id):
 
 
 @bp.route('/<int:team_id>/<int:year>')
+@cache.cached(timeout=600, make_cache_key=lambda: f'team_year_{team_id}_{year}')
 def team_year(team_id, year):
     """Team year page - historical roster and stats for a specific season"""
     # Get team year data (handles both current and historical years)

@@ -1,6 +1,7 @@
 """Routes for coach pages"""
 from flask import Blueprint, render_template, abort, send_file
 from app.models import Coach, Player, Team, City, State, Nation
+from app.extensions import cache
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload, selectinload, load_only, raiseload
 import os
@@ -9,6 +10,7 @@ coaches_bp = Blueprint('coaches', __name__, url_prefix='/coaches')
 
 
 @coaches_bp.route('/')
+@cache.cached(timeout=600, key_prefix='coaches_list')
 def coach_list():
     """Display list of all coaches grouped by occupation"""
 
@@ -46,6 +48,7 @@ def coach_list():
 
 
 @coaches_bp.route('/<int:coach_id>')
+@cache.cached(timeout=600, make_cache_key=lambda: f'coach_detail_{coach_id}')
 def coach_detail(coach_id):
     """Display detailed information for a specific coach"""
 
