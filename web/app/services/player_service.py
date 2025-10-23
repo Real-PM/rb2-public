@@ -72,12 +72,14 @@ def get_player_career_batting_stats(player_id, league_level_filter=None):
     # Only get overall stats (split_id=1)
     # Order by year ascending (earliest to most recent)
     # OPTIMIZATION: Block automatic eager loading of ALL relationships
-    from sqlalchemy.orm import lazyload, raiseload
+    from sqlalchemy.orm import lazyload, raiseload, selectinload, load_only
+    from app.models import Team
 
     # Build base query
     query = PlayerBattingStats.query.options(
         lazyload(PlayerBattingStats.player),  # Don't load player (we already have it)
-        lazyload(PlayerBattingStats.team),    # Don't load team (causes cascade)
+        # CRITICAL: Use selectinload for team to avoid DetachedInstanceError when cached
+        selectinload(PlayerBattingStats.team).load_only(Team.team_id, Team.abbr, Team.name),
         lazyload(PlayerBattingStats.league),  # Don't load league (causes cascade)
         raiseload('*')  # Block ALL other relationships
     ).filter_by(player_id=player_id, split_id=1)
@@ -235,12 +237,14 @@ def get_player_career_pitching_stats(player_id, league_level_filter=None):
     # Query yearly stats (split_id=1 for overall)
     # Order by year ascending (earliest to most recent)
     # OPTIMIZATION: Block automatic eager loading of ALL relationships
-    from sqlalchemy.orm import lazyload, raiseload
+    from sqlalchemy.orm import lazyload, raiseload, selectinload, load_only
+    from app.models import Team
 
     # Build base query
     query = PlayerPitchingStats.query.options(
         lazyload(PlayerPitchingStats.player),  # Don't load player (we already have it)
-        lazyload(PlayerPitchingStats.team),    # Don't load team (causes cascade)
+        # CRITICAL: Use selectinload for team to avoid DetachedInstanceError when cached
+        selectinload(PlayerPitchingStats.team).load_only(Team.team_id, Team.abbr, Team.name),
         lazyload(PlayerPitchingStats.league),  # Don't load league (causes cascade)
         raiseload('*')  # Block ALL other relationships
     ).filter_by(player_id=player_id, split_id=1)
