@@ -15,9 +15,12 @@ class Config:
 
     # SQLAlchemy engine options
     SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_size': 10,
+        'pool_size': 20,
+        'max_overflow': 10,
         'pool_recycle': 3600,
         'pool_pre_ping': True,
+        'pool_timeout': 30,
+        'echo_pool': False,
     }
 
     # Caching
