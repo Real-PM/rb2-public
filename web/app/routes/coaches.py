@@ -48,7 +48,7 @@ def coach_list():
 
 
 @coaches_bp.route('/<int:coach_id>')
-@cache.cached(timeout=600, make_cache_key=lambda: f'coach_detail_{coach_id}')
+@cache.cached(timeout=600)
 def coach_detail(coach_id):
     """Display detailed information for a specific coach"""
 

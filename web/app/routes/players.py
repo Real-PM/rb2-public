@@ -62,7 +62,7 @@ def players_list():
 
 
 @bp.route('/letter/<letter>')
-@cache.cached(timeout=600, make_cache_key=lambda: f'players_letter_{letter}')
+@cache.cached(timeout=600)
 def players_by_letter(letter):
     """Show all players whose last name starts with the given letter.
 
@@ -108,7 +108,7 @@ def players_by_letter(letter):
 
 
 @bp.route('/<int:player_id>')
-@cache.cached(timeout=600, make_cache_key=lambda: f'player_detail_{player_id}')
+@cache.cached(timeout=600)
 def player_detail(player_id):
     """Player detail page - bio, stats, ratings
 

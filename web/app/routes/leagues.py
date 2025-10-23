@@ -22,7 +22,7 @@ def leagues_index():
 
 
 @bp.route('/<int:league_id>')
-@cache.cached(timeout=600, make_cache_key=lambda: f'league_home_{league_id}')
+@cache.cached(timeout=600)
 def league_home(league_id):
     """League home page showing current standings, leaders, and team stats.
 
@@ -79,7 +79,7 @@ def league_home(league_id):
 
 
 @bp.route('/years/<int:year>')
-@cache.cached(timeout=600, make_cache_key=lambda: f'year_summary_{year}')
+@cache.cached(timeout=600)
 def year_summary(year):
     """Year summary page showing results, leaders, and awards for a season.
 

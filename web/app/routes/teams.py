@@ -33,7 +33,7 @@ def teams_list():
 
 
 @bp.route('/<int:team_id>')
-@cache.cached(timeout=600, make_cache_key=lambda: f'team_detail_{team_id}')
+@cache.cached(timeout=600)
 def team_detail(team_id):
     """Team detail page - roster, stats, schedule
 
@@ -124,7 +124,7 @@ def team_detail(team_id):
 
 
 @bp.route('/<int:team_id>/<int:year>')
-@cache.cached(timeout=600, make_cache_key=lambda: f'team_year_{team_id}_{year}')
+@cache.cached(timeout=600)
 def team_year(team_id, year):
     """Team year page - historical roster and stats for a specific season"""
     # Get team year data (handles both current and historical years)
