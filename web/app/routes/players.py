@@ -162,11 +162,14 @@ def player_detail(player_id):
         return cached_data
 
     from concurrent.futures import ThreadPoolExecutor
+    from flask import current_app, copy_current_request_context
     from sqlalchemy.orm import load_only, selectinload, raiseload, lazyload
     from app.models import PlayerCurrentStatus, City, State, Nation, Team
     from app.models import PlayerBattingRatings, PlayerPitchingRatings, PlayerFieldingRatings
 
     # Define query functions for parallel execution
+    # CRITICAL: Use @copy_current_request_context to propagate Flask context to threads
+    @copy_current_request_context
     def get_player_bio():
         """Load player bio with strict relationship control"""
         return (Player.query
@@ -233,18 +236,43 @@ def player_detail(player_id):
                 .filter_by(player_id=player_id)
                 .first_or_404())
 
+    # Wrap service calls with Flask context propagation
+    @copy_current_request_context
+    def get_batting_major():
+        return player_service.get_player_career_batting_stats(player_id, 1)
+
+    @copy_current_request_context
+    def get_batting_minor():
+        return player_service.get_player_career_batting_stats(player_id, 2)
+
+    @copy_current_request_context
+    def get_pitching_major():
+        return player_service.get_player_career_pitching_stats(player_id, 1)
+
+    @copy_current_request_context
+    def get_pitching_minor():
+        return player_service.get_player_career_pitching_stats(player_id, 2)
+
+    @copy_current_request_context
+    def get_trade_history():
+        return player_service.get_player_trade_history(player_id)
+
+    @copy_current_request_context
+    def get_player_news():
+        return player_service.get_player_news(player_id)
+
     # Execute all queries in parallel using ThreadPoolExecutor
     # OPTIMIZATION: Runs 7 independent queries concurrently instead of sequentially
     # Expected: 60s sequential → 10-15s parallel (if queries are I/O bound)
     with ThreadPoolExecutor(max_workers=7) as executor:
         futures = {
             'player': executor.submit(get_player_bio),
-            'batting_major': executor.submit(player_service.get_player_career_batting_stats, player_id, 1),
-            'batting_minor': executor.submit(player_service.get_player_career_batting_stats, player_id, 2),
-            'pitching_major': executor.submit(player_service.get_player_career_pitching_stats, player_id, 1),
-            'pitching_minor': executor.submit(player_service.get_player_career_pitching_stats, player_id, 2),
-            'trade_history': executor.submit(player_service.get_player_trade_history, player_id),
-            'player_news': executor.submit(player_service.get_player_news, player_id)
+            'batting_major': executor.submit(get_batting_major),
+            'batting_minor': executor.submit(get_batting_minor),
+            'pitching_major': executor.submit(get_pitching_major),
+            'pitching_minor': executor.submit(get_pitching_minor),
+            'trade_history': executor.submit(get_trade_history),
+            'player_news': executor.submit(get_player_news)
         }
 
         # Collect results (blocks until all futures complete)
