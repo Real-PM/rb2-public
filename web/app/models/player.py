@@ -68,24 +68,27 @@ class Player(BaseModel, TimestampMixin, CacheableMixin):
 
     # ===== RELATIONSHIPS =====
 
-    # Many-to-One: Player -> City (lazy='joined' because we often need it)
+    # Many-to-One: Player -> City
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
+    # The cascade was: Player→City→State→Nation→Continent (4 levels of joins!)
     city_of_birth = db.relationship(
         'City',
         foreign_keys=[city_of_birth_id],
-        lazy='joined'
+        lazy='select'
     )
 
-    # Many-to-One: Player -> Nation (lazy='joined' because small reference table)
+    # Many-to-One: Player -> Nation
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
     nation = db.relationship(
         'Nation',
         foreign_keys=[nation_id],
-        lazy='joined'
+        lazy='select'
     )
 
     second_nation = db.relationship(
         'Nation',
         foreign_keys=[second_nation_id],
-        lazy='joined'
+        lazy='select'
     )
 
     # One-to-One: Player -> PlayerCurrentStatus (lazy='joined' - always need current team/position)
@@ -322,18 +325,21 @@ class PlayerCurrentStatus(BaseModel):
         back_populates='current_status'
     )
 
-    # Many-to-One: Player -> Team (lazy='joined' - always need current team)
+    # Many-to-One: Player -> Team
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
+    # The cascade was: Player→CurrentStatus→Team→City/Park/Nation/League (each cascading further)
     team = db.relationship(
         'Team',
         foreign_keys=[team_id],
-        lazy='joined'
+        lazy='select'
     )
 
     # Many-to-One: Player -> League
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
     league = db.relationship(
         'League',
         foreign_keys=[league_id],
-        lazy='joined'
+        lazy='select'
     )
 
     @hybrid_property

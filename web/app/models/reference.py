@@ -72,10 +72,11 @@ class Nation(BaseModel, CacheableMixin):
     # ===== RELATIONSHIPS =====
 
     # Many-to-One: Nation -> Continent
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
     continent = db.relationship(
         'Continent',
         back_populates='nations',
-        lazy='joined'
+        lazy='select'
     )
 
     # One-to-Many: Nation -> States
@@ -129,10 +130,11 @@ class State(BaseModel, CacheableMixin):
     # ===== RELATIONSHIPS =====
 
     # Many-to-One: State -> Nation
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
     nation = db.relationship(
         'Nation',
         back_populates='states',
-        lazy='joined'
+        lazy='select'
     )
 
     # One-to-Many: State -> Cities
@@ -171,20 +173,22 @@ class City(BaseModel, CacheableMixin):
     # ===== RELATIONSHIPS =====
 
     # Many-to-One: City -> Nation
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
     nation = db.relationship(
         'Nation',
         back_populates='cities',
-        lazy='joined'
+        lazy='select'
     )
 
     # Many-to-One: City -> State
     # Note: Can't use proper FK because states has composite PK (state_id, nation_id)
     # So we define relationship manually with foreign_keys and primaryjoin
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
     state = db.relationship(
         'State',
         foreign_keys=[state_id, nation_id],
         primaryjoin='and_(City.state_id == State.state_id, City.nation_id == State.nation_id)',
-        lazy='joined',
+        lazy='select',
         viewonly=True  # Can't easily enforce FK constraint
     )
 
@@ -274,9 +278,10 @@ class Park(BaseModel, CacheableMixin):
     # ===== RELATIONSHIPS =====
 
     # Many-to-One: Park -> Nation
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
     nation = db.relationship(
         'Nation',
-        lazy='joined'
+        lazy='select'
     )
 
     # One-to-Many: Park -> Teams (teams that play here)

@@ -55,34 +55,39 @@ class Team(BaseModel, CacheableMixin):
 
     # ===== RELATIONSHIPS =====
 
-    # Many-to-One: Team -> City (lazy='joined' - always need location)
+    # Many-to-One: Team -> City
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
+    # The cascade was: Player→CurrentStatus→Team→City→State→Nation→Continent
     city = db.relationship(
         'City',
         foreign_keys=[city_id],
-        lazy='joined',
+        lazy='select',
         back_populates='teams'
     )
 
-    # Many-to-One: Team -> Park (lazy='joined' - stadium info always needed)
+    # Many-to-One: Team -> Park
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
     park = db.relationship(
         'Park',
         foreign_keys=[park_id],
-        lazy='joined',
+        lazy='select',
         back_populates='teams'
     )
 
     # Many-to-One: Team -> Nation
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
     nation = db.relationship(
         'Nation',
         foreign_keys=[nation_id],
-        lazy='joined'
+        lazy='select'
     )
 
-    # Many-to-One: Team -> League (lazy='joined' - always need league)
+    # Many-to-One: Team -> League
+    # Changed from 'joined' to 'select' to prevent cascading joins (Phase 4D optimization)
     league = db.relationship(
         'League',
         foreign_keys=[league_id],
-        lazy='joined',
+        lazy='select',
         back_populates='teams'
     )
 
@@ -107,11 +112,12 @@ class Team(BaseModel, CacheableMixin):
     )
 
     # One-to-One: Team -> TeamRecord (current season record)
+    # Changed from 'joined' to 'select' to prevent unnecessary joins (Phase 4D optimization)
     record = db.relationship(
         'TeamRecord',
         uselist=False,
         back_populates='team',
-        lazy='joined'
+        lazy='select'
     )
 
     # ===== HYBRID PROPERTIES =====
