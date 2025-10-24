@@ -75,7 +75,7 @@
                     <td class="px-3 py-2 text-sm whitespace-nowrap">
                         <a href="{{ url_for('teams.team_detail', team_id=stat.team_id) }}"
                            class="text-blue-600 hover:text-blue-800">
-                            {{ stat.team.abbr if stat.team else '-' }}
+                            {{ stat.team_abbr if stat.team_abbr else '-' }}
                         </a>
                     </td>
                     <td class="px-3 py-2 text-sm whitespace-nowrap">

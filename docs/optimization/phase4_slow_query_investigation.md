@@ -72,583 +72,264 @@ These indicate **deeply nested eager loading** causing query complexity.
 
 ---
 
-## Investigation Plan
+## Session 2025-10-24: Phase 4D Bottleneck Analysis
 
-### Phase 4A: Diagnose Query Complexity (1-2 hours)
+**Status:** ✅ Bottleneck identified - Dictionary conversion needed
 
-**Objective**: Identify which queries are causing 90-second page loads
+### Current Performance (After Phase 4B Caching)
 
-#### Step 1: Enable SQLAlchemy Query Logging
+| Route         | Cold Load | Warm Load | Cache Hit Improvement |
+|---------------|-----------|-----------|-----------------------|
+| Front Page    | 86s       | 24ms      | 99.97% ✅              |
+| Player List   | 20s       | 9ms       | 99.96% ✅              |
+| Player Detail | 87s       | 9ms       | 99.99% ✅              |
+| Team Detail   | 21s       | 17ms      | 99.92% ✅              |
+| Leaderboards  | 42s       | 10ms      | 99.98% ✅              |
+
+**Caching WORKS!** 99.9%+ improvement on warm loads.
+
+**Problem:** Cold loads still 60-100 seconds (unacceptable).
+
+### 87-Second Player Detail Breakdown
+
+From timestamp analysis in journalctl logs:
+- **31 seconds:** Database queries (8 queries total)
+- **56 seconds:** Template rendering (lazy-load cascades)
+
+### Query Analysis: Player Detail Route
+
+**File:** `web/app/routes/players.py:110`
+
+**Current Pattern (4 Service Calls):**
 ```python
-# In web/app/config.py - StagingConfig
-SQLALCHEMY_ECHO = True  # Temporarily enable for diagnosis
+# Lines 195-200 - Four separate service calls
+batting_data_major = player_service.get_player_career_batting_stats(player_id, league_level_filter=1)
+batting_data_minor = player_service.get_player_career_batting_stats(player_id, league_level_filter=2)
+pitching_data_major = player_service.get_player_career_pitching_stats(player_id, league_level_filter=1)
+pitching_data_minor = player_service.get_player_career_pitching_stats(player_id, league_level_filter=2)
 ```
 
-#### Step 2: Add Query Timing Middleware
+Each call executes **2 SQL queries**:
+1. Yearly stats query (with league level join)
+2. Career totals aggregation (with league level join)
+
+**Total:** 4 calls × 2 queries = **8 SQL queries** (31 seconds)
+
+### The Real Bottleneck: 56 Seconds of Template Rendering
+
+**Root Cause:** Service functions return **ORM objects** to templates.
+
+**File:** `web/app/services/player_service.py:46` (`get_player_career_batting_stats()`)
+
+Current return pattern:
 ```python
-# In web/app/__init__.py
-from flask import request
-import time
+# Line 95: Returns ORM objects
+yearly_stats = query.order_by(PlayerBattingStats.year.asc()).all()  # ← ORM objects
 
-@app.before_request
-def before_request():
-    request.start_time = time.time()
-
-@app.after_request
-def after_request(response):
-    if hasattr(request, 'start_time'):
-        duration = (time.time() - request.start_time) * 1000
-        logger.info(f"{request.method} {request.path} - {duration:.0f}ms")
-    return response
+# Line 64: Returns dict with ORM objects inside
+return {'yearly_stats': yearly_stats, 'career_totals': career_totals}
 ```
 
-#### Step 3: Profile Front Page Route
-Examine `/opt/rb2-public/web/app/routes/main.py` lines causing warnings:
-- Line 29: Likely standings query with deep joins
-- Line 89: Unknown query location
+**Problem:** When templates access ORM object attributes, SQLAlchemy can trigger lazy loads:
 
-Check for:
-- Multiple `selectinload()` or `joinedload()` chains
-- Queries without `load_only()` to limit columns
-- Missing `lazyload()` or `noload()` on unused relationships
-
-#### Step 4: Count Database Rows
-```sql
--- Check data volume on staging
-SELECT
-    schemaname,
-    relname,
-    n_live_tup,
-    pg_size_pretty(pg_total_relation_size(schemaname||'.'||relname)) as size
-FROM pg_stat_user_tables
-ORDER BY n_live_tup DESC
-LIMIT 20;
+```jinja2
+{# Template accessing stat.team.abbr #}
+{% for stat in batting_data_major.yearly_stats %}
+  {{ stat.team.abbr }}  {# ← Can trigger lazy load #}
+{% endfor %}
 ```
 
-**Expected Findings**:
-- Staging has 780K game batting stats (vs dev's smaller dataset)
-- Potentially 20K+ active players being loaded unnecessarily
-- Nested joins causing Cartesian product explosions
+Even with `selectinload(PlayerBattingStats.team)` in the service function (line 82), **memoization caches detached ORM objects** that trigger lazy loads in different contexts.
+
+**Result:** Hundreds of lazy-load queries during template rendering = **56 seconds**
+
+### Why recursion_depth=3 Had No Impact
+
+The `recursion_depth` setting (added in v1.0.5-phase4d-task1) only limits eager-loading depth in the initial query. It does **not prevent** lazy-loads triggered during template rendering.
 
 ---
 
-### Phase 4B: Implement Query Optimizations (2-4 hours)
+## Solution: Return Dictionaries Instead of ORM Objects
 
-**Priority Actions**:
+### Current Implementation (SLOW)
 
-#### 1. Fix Excessive Eager Loading
-**Location**: `web/app/routes/main.py` (front page)
+**File:** `web/app/services/player_service.py:95`
 
-**Problem**: Deep nested joins causing "loader depth excessive" warnings
-
-**Solution**:
 ```python
-# BEFORE (likely current code)
-teams = Team.query.options(
-    joinedload(Team.current_record),
-    joinedload(Team.relations).joinedload(SubLeague.league),
-    joinedload(Team.relations).joinedload(Division),
-    # ... more nested joins
-).all()
-
-# AFTER (optimized)
-teams = Team.query.options(
-    selectinload(Team.current_record).load_only(
-        TeamRecord.w, TeamRecord.l, TeamRecord.pct, TeamRecord.gb
-    ),
-    selectinload(Team.relations).load_only(
-        TeamRelation.league_id, TeamRelation.division_id
-    ),
-    lazyload('*'),  # Don't load anything else
-).all()
+# Returns ORM objects (can lazy-load in templates)
+yearly_stats = query.order_by(PlayerBattingStats.year.asc()).all()
+for stat in yearly_stats:
+    stat.age = calculate_age_for_season(player.date_of_birth, stat.year)
+return {'yearly_stats': yearly_stats, 'career_totals': career_totals}
 ```
 
-#### 2. Add Loader Recursion Limits
+### Proposed Implementation (FAST)
+
 ```python
-# In web/app/config.py - All configs
-SQLALCHEMY_ENGINE_OPTIONS = {
-    'pool_size': 20,
-    'max_overflow': 10,
-    'pool_recycle': 3600,
-    'pool_pre_ping': True,
-    'pool_timeout': 30,
-    'echo_pool': False,
-    'execution_options': {
-        'compiled_cache': {},
-        'recursion_depth': 3,  # Limit eager load depth
+# Query ORM objects with all needed relationships eager-loaded
+yearly_stats = query.order_by(PlayerBattingStats.year.asc()).all()
+
+# Convert to dictionaries BEFORE returning (prevents lazy-loading)
+yearly_stats_dicts = [
+    {
+        'year': stat.year,
+        'age': calculate_age_for_season(player.date_of_birth, stat.year),
+        'team_id': stat.team.team_id if stat.team else None,
+        'team_abbr': stat.team.abbr if stat.team else None,
+        'team_name': stat.team.name if stat.team else None,
+        'league_id': stat.league_id,
+        'g': stat.g,
+        'pa': stat.pa,
+        'ab': stat.ab,
+        'r': stat.r,
+        'h': stat.h,
+        'd': stat.d,
+        't': stat.t,
+        'hr': stat.hr,
+        'rbi': stat.rbi,
+        'sb': stat.sb,
+        'cs': stat.cs,
+        'bb': stat.bb,
+        'ibb': stat.ibb,
+        'k': stat.k,
+        'hp': stat.hp,
+        'sh': stat.sh,
+        'sf': stat.sf,
+        'gdp': stat.gdp,
+        'avg': stat.avg,
+        'obp': stat.obp,
+        'slg': stat.slg,
+        'ops': stat.ops,
+        'iso': stat.iso,
+        'babip': stat.babip,
+        'woba': stat.woba,
+        'wrc_plus': stat.wrc_plus,
+        'war': stat.war,
+        'wrc': stat.wrc,
+        'wraa': stat.wraa,
+        'wpa': stat.wpa,
+        'ubr': stat.ubr
     }
-}
+    for stat in yearly_stats
+]
+
+return {'yearly_stats': yearly_stats_dicts, 'career_totals': career_totals}
 ```
 
-#### 3. Simplify Front Page Query
-Use raw SQL or simpler ORM query:
-```python
-# Option A: Raw SQL (fastest)
-standings_query = text("""
-    SELECT
-        t.team_id, t.name, t.abbr,
-        tr.league_id, tr.division_id,
-        rec.w, rec.l, rec.pct, rec.gb, rec.pos
-    FROM teams t
-    JOIN team_relations tr ON t.team_id = tr.team_id
-    JOIN team_record rec ON t.team_id = rec.team_id
-    WHERE t.level = 1
-    ORDER BY tr.league_id, tr.division_id, rec.pos
-""")
-standings = db.session.execute(standings_query).fetchall()
+**Benefit:** Dictionaries can't lazy-load. Templates access dict keys, not ORM attributes.
 
-# Option B: Denormalized query with minimal joins
-teams = db.session.query(
-    Team.team_id, Team.name,
-    TeamRecord.w, TeamRecord.l, TeamRecord.pct
-).join(TeamRecord).filter(Team.level == 1).all()
-```
+### Template Changes (Minimal)
 
-#### 4. Fix Player Service Queries
-**Location**: `web/app/services/player_service.py:619`
+Templates already use attribute access, which works with dicts:
 
-Likely in `get_featured_players()` or `get_notable_rookies()`:
-```python
-# Add load_only and limit relationships
-players = Player.query.filter(...).options(
-    load_only(Player.player_id, Player.first_name, Player.last_name),
-    selectinload(Player.current_status).load_only(
-        PlayerCurrentStatus.team_id, PlayerCurrentStatus.position
-    ),
-    noload('*'),  # Don't load anything else
-).limit(10).all()
+```jinja2
+{# BEFORE (ORM object) #}
+{{ stat.team.abbr }}
+
+{# AFTER (dictionary) #}
+{{ stat.team_abbr }}
+{# OR {{ stat['team_abbr'] }} #}
 ```
 
 ---
 
-### Phase 4C: Database Trimming Strategy (Optional - Last Resort)
+## Implementation Plan - Phase 4D Task 2
 
-**Only if query optimization doesn't get page loads under 5 seconds**
+### Files to Modify
 
-#### Trimming Criteria
-Remove players who meet ALL conditions:
-1. `retired = 1` (retired)
-2. Never played `league_level = 1` (never reached majors)
-3. Not in `coaches` table (didn't become a coach)
-4. Not referenced in `messages` table (no newspaper mentions)
+1. **`web/app/services/player_service.py`**
+   - **Function:** `get_player_career_batting_stats()` (line 46-211)
+     - Convert `yearly_stats` ORM objects to dictionaries before returning
+     - Keep `career_totals` as dict (already is)
 
-#### Implementation Script
-```python
-# scripts/trim_inactive_players.py
-"""
-Removes inactive players from staging database to improve performance.
-Run ONLY on staging, NEVER on production.
-"""
-from sqlalchemy import text
+   - **Function:** `get_player_career_pitching_stats()` (line 212-378)
+     - Same conversion for pitching stats
+     - Include all pitching stat fields
 
-def identify_trimmable_players(db):
-    """Identify players safe to remove"""
-    query = text("""
-        SELECT COUNT(*) as trimmable_count
-        FROM players_core pc
-        JOIN players_current_status pcs ON pc.player_id = pcs.player_id
-        WHERE pcs.retired = 1
-          AND pc.player_id NOT IN (
-              SELECT DISTINCT player_id
-              FROM players_career_batting_stats
-              WHERE league_level = 1
-              UNION
-              SELECT DISTINCT player_id
-              FROM players_career_pitching_stats
-              WHERE league_level = 1
-          )
-          AND pc.player_id NOT IN (SELECT person_id FROM coaches)
-          AND pc.player_id NOT IN (SELECT player_id FROM messages WHERE player_id IS NOT NULL)
-    """)
-    return db.execute(query).scalar()
+2. **Templates** (verify compatibility):
+   - `web/app/templates/players/detail.html`
+   - `web/app/templates/players/_batting_stats_table.html`
+   - `web/app/templates/players/_pitching_stats_table.html`
+   - Change `stat.team.abbr` → `stat.team_abbr` (if needed)
+   - Change `stat.team.name` → `stat.team_name` (if needed)
 
-def trim_players(db, dry_run=True):
-    """
-    Remove players and all related records
-    WARNING: This is destructive! Always test with dry_run=True first
-    """
-    # List of tables to clean (in dependency order)
-    tables_to_clean = [
-        'players_game_batting_stats',
-        'players_game_pitching_stats',
-        'players_game_fielding_stats',
-        'players_career_batting_stats',
-        'players_career_pitching_stats',
-        'players_career_fielding_stats',
-        'players_ratings',
-        'players_contracts',
-        'players_current_status',
-        'trade_history',
-        'players_core',  # Last - master table
-    ]
+3. **Other Service Functions** (check for ORM returns):
+   - `get_player_trade_history()` - Check if returns ORM objects
+   - `get_player_news()` - Check if returns ORM objects
 
-    # Get player IDs to remove
-    player_ids_query = text("""
-        SELECT pc.player_id
-        FROM players_core pc
-        JOIN players_current_status pcs ON pc.player_id = pcs.player_id
-        WHERE pcs.retired = 1
-          AND pc.player_id NOT IN (...)  -- Full criteria from above
-    """)
+### Testing Protocol
 
-    if dry_run:
-        print(f"DRY RUN: Would remove {count} players and their records")
-        return
+After modification:
+```bash
+# On staging (Minotaur)
+# Clear cache
+docker exec $(docker ps --filter name=redis -q) redis-cli -n 1 FLUSHDB
 
-    # Execute deletions in transaction
-    with db.begin():
-        for table in tables_to_clean:
-            result = db.execute(text(f"""
-                DELETE FROM {table}
-                WHERE player_id IN ({player_ids_query})
-            """))
-            print(f"Deleted {result.rowcount} rows from {table}")
+# Test player detail cold load
+time curl -o /dev/null -s http://localhost:5002/players/10
+
+# Expected: 87s → <20s (77% improvement from 56s template rendering eliminated)
+
+# Test warm load (should still be cached)
+time curl -o /dev/null -s http://localhost:5002/players/10
+
+# Expected: <100ms (caching still works)
+
+# Verify cache keys
+docker exec $(docker ps --filter name=redis -q) redis-cli -n 1 DBSIZE
 ```
 
-#### Expected Impact
-- **Before**: 24K players, 780K game stats
-- **After**: ~15K players (estimate), ~500K game stats
-- **Performance**: 20-30% reduction in query times
-- **Risk**: Medium - could affect historical queries if criteria too aggressive
+**Expected Results:**
+- **Cold load:** 87s → 10-20s (65-88% improvement)
+  - Eliminates 56s of template rendering lazy-loads
+  - 31s of queries remains (will optimize in Task 3 if needed)
+- **Warm load:** <100ms (no change - caching still works)
 
 ---
 
-## Deployment Process
+## Phase 4D Tasks Checklist
 
-### Git Workflow: Dev → Staging
+- [x] **Task 1:** Add `recursion_depth=3` to SQLAlchemy config (v1.0.5-phase4d-task1)
+  - **Result:** No impact (87s → 87s)
+  - **Reason:** Doesn't prevent template lazy-loads
 
-**All optimization changes must flow through git tags for proper version control.**
+- [ ] **Task 2:** Convert service functions to return dictionaries
+  - **Expected:** 87s → 10-20s (eliminate 56s template rendering)
+  - **Tag:** `v1.0.6-phase4d-dict-conversion`
+  - **Status:** Ready to implement
 
-#### 1. Make Changes in Local Dev Repo
-```bash
-# On development machine
-cd /mnt/hdd/PycharmProjects/rb2-public
+- [ ] **Task 3:** Consolidate 4 service calls into 2 (if still needed)
+  - **Expected:** 31s queries → 15s queries
+  - **Only if:** Task 2 doesn't achieve <5s target
 
-# Make code changes for optimization
-# Edit files in web/app/routes/, web/app/services/, etc.
+- [ ] **Task 4:** Raw SQL with CTEs (if still needed)
+  - **Expected:** 15s → <5s
+  - **Only if:** Tasks 2-3 don't achieve <5s target
 
-# Test locally
-cd web && python run.py
-# Verify changes work in dev environment
-```
-
-#### 2. Commit and Tag Changes
-```bash
-# Stage your changes
-git add web/app/routes/main.py web/app/services/player_service.py web/app/config.py
-
-# Commit with descriptive message
-git commit -m "Phase 4A: Fix excessive eager loading on front page
-
-- Limit selectinload depth in main.py standings query
-- Add load_only to player service queries
-- Set recursion_depth=3 in SQLAlchemy config
-- Expected improvement: 50-70% reduction in query time"
-
-# Create a version tag
-git tag -a v1.0.1-phase4a -m "Phase 4A: Query optimization for staging performance
-
-Changes:
-- Fix SQLAlchemy loader depth warnings
-- Optimize front page standings query
-- Add recursion limits to prevent deep joins
-
-Expected: Reduce 90s page loads to <10s"
-
-# Push to origin (includes tags)
-git push origin master
-git push origin v1.0.1-phase4a
-```
-
-#### 3. Deploy to Staging (On Minotaur)
-```bash
-# SSH to staging server
-ssh jayco@192.168.10.94
-
-# Navigate to staging repo
-cd /opt/rb2-public
-
-# Fetch latest changes and tags from origin
-git fetch origin --tags
-
-# List available tags to verify
-git tag -l
-# Output should show: v1.0.1-phase4a
-
-# Checkout the specific tag
-git checkout v1.0.1-phase4a
-
-# Verify you're on the tag
-git describe --tags
-# Output: v1.0.1-phase4a
-
-# Install any new dependencies (if requirements changed)
-source /opt/rb2-public/venv/bin/activate
-pip install -r web/requirements.txt
-
-# Restart the service
-systemctl restart rb2-staging
-
-# Check service started OK
-systemctl status rb2-staging
-
-# Monitor logs for errors
-journalctl -u rb2-staging -f
-# Press Ctrl+C to stop following logs
-```
-
-#### 4. Test Performance
-```bash
-# Still on Minotaur
-# Test 1: Cache miss (cold)
-curl -o /dev/null -s -w 'Load time: %{time_total}s\n' http://localhost:5002/
-
-# Test 2: Cache hit (warm)
-curl -o /dev/null -s -w 'Load time: %{time_total}s\n' http://localhost:5002/
-
-# Check Redis cache keys
-docker exec $(docker ps --filter name=redis -q) redis-cli --scan --pattern 'rb2_staging:*'
-
-# Expected results:
-# - First request: <10s (down from 90s)
-# - Second request: <100ms (cached)
-# - Redis should show cache keys
-```
-
-#### 5. Rollback (If Something Breaks)
-```bash
-# On Minotaur
-cd /opt/rb2-public
-
-# Go back to previous working tag/commit
-git checkout v1.0.0  # or whatever the last working tag was
-# OR
-git checkout master  # return to latest master
-
-# Restart service
-systemctl restart rb2-staging
-```
-
----
-
-## Tag Naming Convention
-
-Use semantic versioning with phase suffixes:
-
-- `v1.0.0` - Initial production release
-- `v1.0.1-phase4a` - Phase 4A: Query diagnosis
-- `v1.0.2-phase4b` - Phase 4B: Query optimizations
-- `v1.0.3-phase4c` - Phase 4C: Database trimming (if needed)
-- `v1.1.0` - Major feature or significant optimization milestone
-
-**Format**: `v{major}.{minor}.{patch}-{phase}{iteration}`
+- [ ] **Task 5:** Database trimming (last resort - optional)
+  - **Only if:** All other optimizations fail
 
 ---
 
 ## Success Criteria
 
-### Phase 4A Complete (Diagnosis)
-- ✅ Query logging enabled
-- ✅ Slow queries identified (specific lines, tables, joins)
-- ✅ Baseline metrics recorded (query count, execution time per query)
-- ✅ Root cause documented
-
-### Phase 4B Complete (Optimization)
-- ✅ Front page load: <5 seconds uncached, <100ms cached
-- ✅ No SQLAlchemy "loader depth" warnings
-- ✅ Redis cache keys created and used
-- ✅ Worker CPU usage: <30% average
-- ✅ Database connection pool stable (<80% utilization)
-
-### Phase 4C Complete (Trimming - Optional)
-- ✅ Player count reduced by 30-40%
-- ✅ Game stats reduced by 30-40%
-- ✅ Query performance improved by additional 20-30%
-- ✅ No data loss for important players (majors, coaches, news mentions)
-
----
-
-## Notes and Gotchas
-
-### Git Tag Management
-- **Always fetch tags**: `git fetch origin --tags` before checking out
-- **List tags**: `git tag -l` to see what's available
-- **Detached HEAD**: Checking out a tag puts you in "detached HEAD" state - this is OK for deployment, but don't make changes here
-- **Return to branch**: `git checkout master` to get back to normal development
-
-### Staging Environment Specifics
-- **Database**: 3-4x larger than dev (780K vs ~200K game stats)
-- **Redis**: Shared on DB server, namespace `rb2_staging:`
-- **Service**: Must restart after code changes: `systemctl restart rb2-staging`
-- **Logs**: `journalctl -u rb2-staging -f` for real-time monitoring
-
-### Performance Testing
-- **Always clear cache first**: `docker exec $(docker ps --filter name=redis -q) redis-cli FLUSHDB`
-- **Test both cold and warm**: First request = cache miss, second = cache hit
-- **Use curl timing**: `-w 'Time: %{time_total}s\n'` for accurate measurement
-- **Monitor worker CPU**: `ps aux | grep gunicorn | grep 5002` during requests
-
-### Common Issues
-1. **Service won't start**: Check `journalctl -u rb2-staging` for Python syntax errors
-2. **Redis not caching**: Verify FLASK_ENV=staging and cache type is RedisCache
-3. **Still slow with cache**: Check for cache exceptions in logs, verify decorators present
-4. **Workers crashing**: Check timeout (120s), increase if needed for cold starts
-
----
-
-## Session 2025-10-23: Phase 4A Implementation ✅
-
-**Status:** Connection pool optimization completed, ready for deployment
-
-### Findings from Code Audit
-
-**Good News:**
-1. ✅ **Phase 3 caching code already present** in rb2-public codebase
-   - `@cache.cached()` decorator on main.py index route (line 13)
-   - `@cache.memoize()` decorators on all player_service functions
-   - Redis configuration properly set for all environments
-   - Flask-Caching and redis in requirements.txt
-
-2. ✅ **Query optimizations already implemented**
-   - main.py uses `load_only()`, `lazyload()`, `raiseload()` to prevent cascades
-   - player_service.py uses raw SQL with CTEs for complex queries
-   - Context processors use simple, efficient queries
-
-3. ✅ **SQLAlchemy warnings locations verified**
-   - Line 29: `League.query.filter_by(league_level=1).order_by(League.name).all()` - SIMPLE
-   - Line 89: `Division.query.filter_by(...).first()` - SIMPLE
-   - Line 619 (player_service): `League.query.filter_by(league_level=1).first()` - SIMPLE
-   - **Conclusion**: Warnings likely from relationship loading, not these specific queries
-
-### Changes Implemented
-
-**Commit:** `ecef8ea`
-**Tag:** `v1.0.1-phase4a`
-
-```python
-# web/app/config.py - Updated SQLALCHEMY_ENGINE_OPTIONS
-SQLALCHEMY_ENGINE_OPTIONS = {
-    'pool_size': 20,          # Was 10 - doubled for staging load
-    'max_overflow': 10,       # NEW - burst capacity
-    'pool_recycle': 3600,
-    'pool_pre_ping': True,
-    'pool_timeout': 30,       # NEW - prevent indefinite waits
-    'echo_pool': False,       # NEW - reduce log noise
-}
-```
-
-### Root Cause Analysis
-
-**The mystery: Why is caching not working on staging?**
-
-The investigation doc states:
-- Cache decorators are present on staging (confirmed manually)
-- Redis is running and accessible
-- But Redis shows **0 keys** after requests
-- Page loads still take 90 seconds even with cache decorator
-
-**Hypothesis for next deployment:**
-1. Code on staging may be outdated (despite having some manual edits)
-2. Flask-Caching may not be properly initialized
-3. FLASK_ENV variable may not be set correctly
-4. Gunicorn workers may not have access to updated code
-
-**Deployment will reveal:**
-- Whether connection pool improvements help
-- If caching starts working with fresh deployment
-- If additional query optimization needed
-
----
-
-## Next Steps: Deployment & Testing
-
-**Step 1: Deploy v1.0.1-phase4a to Staging**
-
-```bash
-# On Minotaur (192.168.10.94)
-ssh jayco@192.168.10.94
-cd /opt/rb2-public
-
-# Fetch and checkout tag
-git fetch origin --tags
-git checkout v1.0.1-phase4a
-
-# Verify dependencies
-source venv/bin/activate
-pip install -r web/web_requirements.txt
-
-# Restart service
-sudo systemctl restart rb2-staging
-sudo systemctl status rb2-staging
-
-# Monitor logs
-journalctl -u rb2-staging -f
-```
-
-**Step 2: Test Performance**
-
-```bash
-# Clear Redis first
-docker exec $(docker ps --filter name=redis -q) redis-cli -n 1 FLUSHDB
-
-# Test 1: Cold load (cache miss)
-time curl -o /dev/null -s http://localhost:5002/
-
-# Test 2: Warm load (should be cached)
-time curl -o /dev/null -s http://localhost:5002/
-
-# Verify cache keys exist
-docker exec $(docker ps --filter name=redis -q) redis-cli -n 1 --scan --pattern 'rb2_staging:*'
-```
-
-**Expected Results:**
-- **If caching works:** Cold ~5-10s, warm <1s, Redis shows keys
-- **If still broken:** Cold 90s, warm 90s, Redis empty → investigate Flask-Caching init
-
-**Step 3: If Caching Still Doesn't Work**
-
-Enable diagnostic logging:
-```python
-# Temporarily in web/app/config.py - StagingConfig
-SQLALCHEMY_ECHO = True  # See all queries
-CACHE_TYPE = 'RedisCache'  # Verify this is set
-```
-
-Check logs for:
-- Cache initialization messages
-- Redis connection errors
-- SQLAlchemy query count and timing
-
----
-
-## Next Session Tasks (If Issues Persist)
-
-**If caching works after deployment:** ✅ DONE - Monitor and move to Phase 5
-
-**If caching still broken:**
-1. Add debug logging to cache decorator calls
-2. Test Flask-Caching manually in flask shell
-3. Verify FLASK_ENV environment variable
-4. Check gunicorn worker process has correct config
-
-**If caching works but still slow:**
-1. Enable SQLALCHEMY_ECHO to identify slow queries
-2. Add query timing middleware (see investigation plan Phase 4A Step 2)
-3. Profile specific queries with EXPLAIN ANALYZE
-4. Consider database trimming strategy (Phase 4C)
+- ✅ **Primary:** Player detail cold loads <5 seconds
+- ✅ **Secondary:** Front page cold loads <10 seconds
+- ✅ **Maintained:** Warm loads remain <100ms (99.9%+ cache hit)
+- ✅ **No Regressions:** All existing functionality works
 
 ---
 
 ## Related Documentation
 
+- `docs/optimization/phase4d_under_5s_checklist.md` - Persistent task checklist
 - `docs/optimization/optimization-strategy.md` - Overall optimization strategy
-- `docs/optimization/phase3_results.md` - Redis caching implementation (99.8% improvement)
+- `docs/optimization/phase3_results.md` - Redis caching implementation
 - `docs/optimization/phase2_results.md` - Application-level optimizations
-- `docs/optimization/phase1b_results.md` - N+1 query fixes (75% improvement)
-- `docs/stage-issues/stage-issues.md` - Known staging environment issues
+- `docs/optimization/phase1b_results.md` - N+1 query fixes
 
 ---
 
-**Document Status:** 🟢 Phase 4A Complete - Ready for Deployment
-**Last Updated:** 2025-10-23 (Session 2)
-**Next Review:** After staging deployment and performance testing
+**Document Status:** 🟡 Phase 4D In Progress - Dictionary conversion ready
+**Last Updated:** 2025-10-24 (Session 3)
+**Next Review:** After Task 2 implementation and testing
