@@ -21,6 +21,10 @@ class Config:
         'pool_pre_ping': True,
         'pool_timeout': 30,
         'echo_pool': False,
+        'execution_options': {
+            'compiled_cache': {},
+            'recursion_depth': 3,  # Limit eager load depth to prevent cascades
+        }
     }
 
     # Caching
