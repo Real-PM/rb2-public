@@ -1,5 +1,5 @@
 """Player routes"""
-from flask import Blueprint, render_template, request, abort, send_file
+from flask import Blueprint, render_template, request, abort, send_file, make_response
 from app.models import Player, PlayerCurrentStatus, PlayerBattingStats, PlayerPitchingStats
 from app.services import player_service
 from sqlalchemy import desc, func, and_
@@ -121,10 +121,16 @@ def player_detail(player_id):
     Manual caching implemented due to Flask-Caching decorator issues.
     """
     # Manual cache check
+    # Note: Flask-Caching automatically adds CACHE_KEY_PREFIX (e.g., 'rb2_staging:')
     cache_key = f'player_detail:{player_id}'
-    cached_html = cache.get(cache_key)
-    if cached_html is not None:
-        return cached_html
+    cached_data = cache.get(cache_key)
+
+    import logging
+    logging.warning(f"Cache lookup for {cache_key}: {'HIT' if cached_data else 'MISS'}")
+
+    if cached_data is not None:
+        logging.warning(f"Cache hit! Returning cached data for player {player_id}")
+        return cached_data
 
     from sqlalchemy.orm import load_only, selectinload, raiseload, lazyload
     from app.models import PlayerCurrentStatus, City, State, Nation, Team
@@ -225,8 +231,14 @@ def player_detail(player_id):
                           trade_history=trade_history,
                           player_news=player_news)
 
-    # Cache the rendered HTML for 10 minutes
-    cache.set(cache_key, rendered_html, timeout=600)
+    # Cache the rendered HTML string
+    import logging
+    set_result = cache.set(cache_key, rendered_html, timeout=600)
+    logging.warning(f"Cache set for {cache_key}: {set_result}")
+
+    # Immediately test retrieval
+    test_get = cache.get(cache_key)
+    logging.warning(f"Immediate cache test for {cache_key}: {'SUCCESS' if test_get else 'FAILED'}")
 
     return rendered_html
 
