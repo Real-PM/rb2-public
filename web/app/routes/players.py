@@ -19,15 +19,19 @@ class DictToObject:
     - 'slg' -> 'slugging_percentage'
     """
     def __init__(self, d):
+        # First, update dict normally
         self.__dict__.update(d)
-        # Add aliases for short key names (from yearly stats) to match template expectations
-        if 'avg' in d and 'batting_average' not in d:
+
+        # Then add aliases for short key names (from yearly stats) to match template expectations
+        # IMPORTANT: Check if key exists in source dict, not in self.__dict__
+        if 'avg' in d:
             self.batting_average = d['avg']
-        if 'obp' in d and 'on_base_percentage' not in d:
+        if 'obp' in d:
             self.on_base_percentage = d['obp']
-        if 'slg' in d and 'slugging_percentage' not in d:
+        if 'slg' in d:
             self.slugging_percentage = d['slg']
-        if 'ops' in d and 'ops' not in self.__dict__:
+        # OPS might come from both short and long form
+        if 'ops' in d and not hasattr(self, 'ops'):
             self.ops = d['ops']
 
 
