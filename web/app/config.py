@@ -61,7 +61,7 @@ class DevelopmentConfig(Config):
 class StagingConfig(Config):
     """Staging environment - Centralized Redis on DB server"""
     DEBUG = False
-    SQLALCHEMY_ECHO = False
+    SQLALCHEMY_ECHO = True  # TEMPORARY: Enable to find slow queries
 
     # Redis caching (centralized on DB server, separate DB namespace)
     CACHE_TYPE = 'RedisCache'
