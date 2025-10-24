@@ -10,6 +10,19 @@ import os
 bp = Blueprint('players', __name__)
 
 
+class DictToObject:
+    """Convert dict to object with attribute access for template compatibility"""
+    def __init__(self, d):
+        self.__dict__.update(d)
+
+
+def _convert_dict_list_to_objects(dict_list):
+    """Convert list of dicts to list of objects for template compatibility"""
+    if not dict_list:
+        return []
+    return [DictToObject(d) if isinstance(d, dict) else d for d in dict_list]
+
+
 def _make_player_detail_cache_key():
     """Generate cache key for player detail route"""
     return f'player_detail_{request.view_args.get("player_id")}'
@@ -209,18 +222,38 @@ def player_detail(player_id):
     # Total: 4 calls * 2 queries = 8 SQL queries for stats
     # Note: We only fetch Major and Minor league stats separately (not "ALL LEVELS")
     # This reduces query load by 33% while still providing complete data
-    batting_data_major = player_service.get_player_career_batting_stats(player_id, league_level_filter=1)
-    batting_data_minor = player_service.get_player_career_batting_stats(player_id, league_level_filter=2)
+    batting_data_major_raw = player_service.get_player_career_batting_stats(player_id, league_level_filter=1)
+    batting_data_minor_raw = player_service.get_player_career_batting_stats(player_id, league_level_filter=2)
 
     # Get pitching stats with career totals from service layer (split by league level)
-    pitching_data_major = player_service.get_player_career_pitching_stats(player_id, league_level_filter=1)
-    pitching_data_minor = player_service.get_player_career_pitching_stats(player_id, league_level_filter=2)
+    pitching_data_major_raw = player_service.get_player_career_pitching_stats(player_id, league_level_filter=1)
+    pitching_data_minor_raw = player_service.get_player_career_pitching_stats(player_id, league_level_filter=2)
 
     # Get trade history
-    trade_history = player_service.get_player_trade_history(player_id)
+    trade_history_raw = player_service.get_player_trade_history(player_id)
 
     # Get player news (contracts, injuries, awards, highlights, career milestones)
-    player_news = player_service.get_player_news(player_id)
+    player_news_raw = player_service.get_player_news(player_id)
+
+    # Convert dicts to objects for template compatibility
+    batting_data_major = {
+        'yearly_stats': _convert_dict_list_to_objects(batting_data_major_raw.get('yearly_stats', [])),
+        'career_totals': DictToObject(batting_data_major_raw['career_totals']) if batting_data_major_raw.get('career_totals') else None
+    }
+    batting_data_minor = {
+        'yearly_stats': _convert_dict_list_to_objects(batting_data_minor_raw.get('yearly_stats', [])),
+        'career_totals': DictToObject(batting_data_minor_raw['career_totals']) if batting_data_minor_raw.get('career_totals') else None
+    }
+    pitching_data_major = {
+        'yearly_stats': _convert_dict_list_to_objects(pitching_data_major_raw.get('yearly_stats', [])),
+        'career_totals': DictToObject(pitching_data_major_raw['career_totals']) if pitching_data_major_raw.get('career_totals') else None
+    }
+    pitching_data_minor = {
+        'yearly_stats': _convert_dict_list_to_objects(pitching_data_minor_raw.get('yearly_stats', [])),
+        'career_totals': DictToObject(pitching_data_minor_raw['career_totals']) if pitching_data_minor_raw.get('career_totals') else None
+    }
+    trade_history = _convert_dict_list_to_objects(trade_history_raw)
+    player_news = _convert_dict_list_to_objects(player_news_raw)
 
     rendered_html = render_template('players/detail.html',
                           player=player,
