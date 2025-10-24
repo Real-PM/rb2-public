@@ -13,40 +13,40 @@
 -- BATTING STATS INDEXES
 -- =============================================================================
 
--- Composite index for player + split + league level (most efficient)
-CREATE INDEX IF NOT EXISTS idx_batting_player_split_league
-ON players_batting(player_id, split_id, league_level);
+-- Composite index for player + split + level (most efficient)
+CREATE INDEX IF NOT EXISTS idx_batting_player_split_level
+ON players_career_batting_stats(player_id, split_id, level_id);
 
 -- Individual indexes for partial query coverage
 CREATE INDEX IF NOT EXISTS idx_batting_player_split
-ON players_batting(player_id, split_id);
+ON players_career_batting_stats(player_id, split_id);
 
-CREATE INDEX IF NOT EXISTS idx_batting_player_league
-ON players_batting(player_id, league_level);
+CREATE INDEX IF NOT EXISTS idx_batting_player_level
+ON players_career_batting_stats(player_id, level_id);
 
 -- Partial index for regular season (split_id=1) - most common query
 CREATE INDEX IF NOT EXISTS idx_batting_player_regular_season
-ON players_batting(player_id, league_level)
+ON players_career_batting_stats(player_id, level_id)
 WHERE split_id = 1;
 
 -- =============================================================================
 -- PITCHING STATS INDEXES
 -- =============================================================================
 
--- Composite index for player + split + league level (most efficient)
-CREATE INDEX IF NOT EXISTS idx_pitching_player_split_league
-ON players_pitching(player_id, split_id, league_level);
+-- Composite index for player + split + level (most efficient)
+CREATE INDEX IF NOT EXISTS idx_pitching_player_split_level
+ON players_career_pitching_stats(player_id, split_id, level_id);
 
 -- Individual indexes for partial query coverage
 CREATE INDEX IF NOT EXISTS idx_pitching_player_split
-ON players_pitching(player_id, split_id);
+ON players_career_pitching_stats(player_id, split_id);
 
-CREATE INDEX IF NOT EXISTS idx_pitching_player_league
-ON players_pitching(player_id, league_level);
+CREATE INDEX IF NOT EXISTS idx_pitching_player_level
+ON players_career_pitching_stats(player_id, level_id);
 
 -- Partial index for regular season (split_id=1) - most common query
 CREATE INDEX IF NOT EXISTS idx_pitching_player_regular_season
-ON players_pitching(player_id, league_level)
+ON players_career_pitching_stats(player_id, level_id)
 WHERE split_id = 1;
 
 -- =============================================================================

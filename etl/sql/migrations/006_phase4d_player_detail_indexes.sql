@@ -19,49 +19,52 @@
 -- =============================================================================
 -- BATCH 1: Players Batting Stats Indexes
 -- =============================================================================
--- Current State: Only primary key on player_id exists
--- Query Pattern: WHERE player_id = X AND split_id = 1 AND league_level = {1,2}
+-- Current State: Only primary key on (player_id, year, team_id, split_id, stint) exists
+-- Query Pattern: WHERE player_id = X AND split_id = 1 [AND level_id via JOIN to leagues]
 -- Impact: Eliminates full table scans, enables index-only scans
+--
+-- Note: Using level_id (in stats table) instead of league_level (requires JOIN)
+-- level_id corresponds to league_level: 1=MLB, 2-6=minors
 
--- Composite index for most common query pattern (player + split + league level)
+-- Composite index for most common query pattern (player + split + level)
 -- This single index covers all player detail page batting queries
-CREATE INDEX IF NOT EXISTS idx_batting_player_split_league
-ON players_batting(player_id, split_id, league_level);
+CREATE INDEX IF NOT EXISTS idx_batting_player_split_level
+ON players_career_batting_stats(player_id, split_id, level_id);
 
 -- Individual indexes for partial query coverage (backwards compatibility)
 CREATE INDEX IF NOT EXISTS idx_batting_player_split
-ON players_batting(player_id, split_id);
+ON players_career_batting_stats(player_id, split_id);
 
-CREATE INDEX IF NOT EXISTS idx_batting_player_league
-ON players_batting(player_id, league_level);
+CREATE INDEX IF NOT EXISTS idx_batting_player_level
+ON players_career_batting_stats(player_id, level_id);
 
 -- Optional: Partial index for split_id=1 (regular season - most common)
 -- Smaller index size, faster for the 90% case
 CREATE INDEX IF NOT EXISTS idx_batting_player_regular_season
-ON players_batting(player_id, league_level)
+ON players_career_batting_stats(player_id, level_id)
 WHERE split_id = 1;
 
 -- =============================================================================
 -- BATCH 2: Players Pitching Stats Indexes
 -- =============================================================================
--- Current State: Only primary key on player_id exists
--- Query Pattern: WHERE player_id = X AND split_id = 1 AND league_level = {1,2}
+-- Current State: Only primary key on (player_id, year, team_id, split_id, stint) exists
+-- Query Pattern: WHERE player_id = X AND split_id = 1 [AND level_id via JOIN to leagues]
 -- Impact: Eliminates full table scans, enables index-only scans
 
--- Composite index for most common query pattern (player + split + league level)
-CREATE INDEX IF NOT EXISTS idx_pitching_player_split_league
-ON players_pitching(player_id, split_id, league_level);
+-- Composite index for most common query pattern (player + split + level)
+CREATE INDEX IF NOT EXISTS idx_pitching_player_split_level
+ON players_career_pitching_stats(player_id, split_id, level_id);
 
 -- Individual indexes for partial query coverage (backwards compatibility)
 CREATE INDEX IF NOT EXISTS idx_pitching_player_split
-ON players_pitching(player_id, split_id);
+ON players_career_pitching_stats(player_id, split_id);
 
-CREATE INDEX IF NOT EXISTS idx_pitching_player_league
-ON players_pitching(player_id, league_level);
+CREATE INDEX IF NOT EXISTS idx_pitching_player_level
+ON players_career_pitching_stats(player_id, level_id);
 
 -- Optional: Partial index for split_id=1 (regular season - most common)
 CREATE INDEX IF NOT EXISTS idx_pitching_player_regular_season
-ON players_pitching(player_id, league_level)
+ON players_career_pitching_stats(player_id, level_id)
 WHERE split_id = 1;
 
 -- =============================================================================
@@ -162,13 +165,13 @@ WHERE player_id_1_9 IS NOT NULL;
 -- =============================================================================
 -- Run these to verify indexes were created successfully:
 
--- Check batting indexes
--- SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'players_batting' ORDER BY indexname;
+-- Check batting indexes (should show 4 new indexes)
+-- SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'players_career_batting_stats' ORDER BY indexname;
 
--- Check pitching indexes
--- SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'players_pitching' ORDER BY indexname;
+-- Check pitching indexes (should show 4 new indexes)
+-- SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'players_career_pitching_stats' ORDER BY indexname;
 
--- Check trade indexes
+-- Check trade indexes (should show 20 new indexes)
 -- SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'trade_history' ORDER BY indexname;
 
 -- =============================================================================
@@ -177,12 +180,12 @@ WHERE player_id_1_9 IS NOT NULL;
 -- Before/After comparison:
 --
 -- BEFORE (no indexes):
--- EXPLAIN ANALYZE SELECT * FROM players_batting WHERE player_id = 3000 AND split_id = 1 AND league_level = 1;
+-- EXPLAIN ANALYZE SELECT * FROM players_career_batting_stats WHERE player_id = 3000 AND split_id = 1 AND level_id = 1;
 -- Expected: Seq Scan, ~20-30s execution time
 --
 -- AFTER (with indexes):
--- EXPLAIN ANALYZE SELECT * FROM players_batting WHERE player_id = 3000 AND split_id = 1 AND league_level = 1;
--- Expected: Index Scan using idx_batting_player_split_league, <100ms execution time
+-- EXPLAIN ANALYZE SELECT * FROM players_career_batting_stats WHERE player_id = 3000 AND split_id = 1 AND level_id = 1;
+-- Expected: Index Scan using idx_batting_player_split_level, <100ms execution time
 --
 -- Full page test:
 -- time curl -o /dev/null -s -w "%{http_code}\n" http://localhost:5002/players/3000
@@ -191,13 +194,13 @@ WHERE player_id_1_9 IS NOT NULL;
 -- =============================================================================
 -- ROLLBACK (if needed)
 -- =============================================================================
--- DROP INDEX IF EXISTS idx_batting_player_split_league;
+-- DROP INDEX IF EXISTS idx_batting_player_split_level;
 -- DROP INDEX IF EXISTS idx_batting_player_split;
--- DROP INDEX IF EXISTS idx_batting_player_league;
+-- DROP INDEX IF EXISTS idx_batting_player_level;
 -- DROP INDEX IF EXISTS idx_batting_player_regular_season;
--- DROP INDEX IF EXISTS idx_pitching_player_split_league;
+-- DROP INDEX IF EXISTS idx_pitching_player_split_level;
 -- DROP INDEX IF EXISTS idx_pitching_player_split;
--- DROP INDEX IF EXISTS idx_pitching_player_league;
+-- DROP INDEX IF EXISTS idx_pitching_player_level;
 -- DROP INDEX IF EXISTS idx_pitching_player_regular_season;
 -- DROP INDEX IF EXISTS idx_trade_history_player_0_0;
 -- DROP INDEX IF EXISTS idx_trade_history_player_0_1;
