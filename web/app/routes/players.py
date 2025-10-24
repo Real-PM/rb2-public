@@ -10,6 +10,11 @@ import os
 bp = Blueprint('players', __name__)
 
 
+def _make_player_detail_cache_key():
+    """Generate cache key for player detail route"""
+    return f'player_detail_{request.view_args.get("player_id")}'
+
+
 @bp.route('/')
 @cache.cached(timeout=600, key_prefix='players_list')
 def players_list():
@@ -108,7 +113,7 @@ def players_by_letter(letter):
 
 
 @bp.route('/<int:player_id>')
-@cache.cached(timeout=600, key_prefix=lambda: f'player_detail_{request.view_args.get("player_id")}')
+@cache.cached(timeout=600, key_prefix=_make_player_detail_cache_key)
 def player_detail(player_id):
     """Player detail page - bio, stats, ratings
 
