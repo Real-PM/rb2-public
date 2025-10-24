@@ -148,10 +148,9 @@ def players_by_letter(letter):
 def player_detail(player_id):
     """Player detail page - bio, stats, ratings
 
-    OPTIMIZATION:
-    - Use load_only to minimize data fetching and prevent cascading eager loads
-    - Manual caching implemented due to Flask-Caching decorator issues
-    - ThreadPoolExecutor for parallel query execution
+    OPTIMIZATION: Use load_only to minimize data fetching and prevent
+    cascading eager loads. Only load columns we actually use in the template.
+    Manual caching implemented due to Flask-Caching decorator issues.
     """
     # Manual cache check
     # Note: Flask-Caching automatically adds CACHE_KEY_PREFIX (e.g., 'rb2_staging:')
@@ -161,131 +160,95 @@ def player_detail(player_id):
     if cached_data is not None:
         return cached_data
 
-    from concurrent.futures import ThreadPoolExecutor
-    from flask import current_app, copy_current_request_context
     from sqlalchemy.orm import load_only, selectinload, raiseload, lazyload
     from app.models import PlayerCurrentStatus, City, State, Nation, Team
     from app.models import PlayerBattingRatings, PlayerPitchingRatings, PlayerFieldingRatings
 
-    # Define query functions for parallel execution
-    # CRITICAL: Use @copy_current_request_context to propagate Flask context to threads
-    @copy_current_request_context
-    def get_player_bio():
-        """Load player bio with strict relationship control"""
-        return (Player.query
-                .options(
-                    # Load only core player bio fields
-                    load_only(
-                        Player.player_id,
-                        Player.first_name,
-                        Player.last_name,
-                        Player.nick_name,
-                        Player.date_of_birth,
-                        Player.height,
-                        Player.weight,
-                        Player.bats,
-                        Player.throws,
-                        Player.city_of_birth_id,
-                        Player.nation_id,
-                        Player.second_nation_id
-                    ),
-                    # Load city with state and nation for birthplace_display
-                    selectinload(Player.city_of_birth).load_only(
-                        City.city_id,
-                        City.name,
-                        City.state_id,
-                        City.nation_id
-                    ).selectinload(City.state).load_only(
-                        State.state_id,
-                        State.nation_id,
-                        State.abbreviation
-                    ).selectinload(State.nation).load_only(
-                        Nation.nation_id,
-                        Nation.abbreviation
-                    ).raiseload('*'),
-                    # Load nation name only (no cascades)
-                    selectinload(Player.nation).load_only(
-                        Nation.nation_id,
-                        Nation.name,
-                        Nation.abbreviation
-                    ).raiseload('*'),
-                    # Load second nation if exists
-                    selectinload(Player.second_nation).load_only(
-                        Nation.nation_id,
-                        Nation.name,
-                        Nation.abbreviation
-                    ).raiseload('*'),
-                    # Load current status with minimal team info
-                    selectinload(Player.current_status).load_only(
-                        PlayerCurrentStatus.player_id,
-                        PlayerCurrentStatus.team_id,
-                        PlayerCurrentStatus.position,
-                        PlayerCurrentStatus.retired
-                    ).selectinload(PlayerCurrentStatus.team).load_only(
-                        Team.team_id,
-                        Team.name,
-                        Team.abbr
-                    ).raiseload('*'),
-                    # Override lazy='joined' on ratings - use lazyload instead
-                    lazyload(Player.batting_ratings),
-                    lazyload(Player.pitching_ratings),
-                    lazyload(Player.fielding_ratings),
-                    # Block ALL other relationships
-                    raiseload('*')
-                )
-                .filter_by(player_id=player_id)
-                .first_or_404())
+    # Query with strict column and relationship control
+    # CRITICAL: Override model's lazy='joined' with selectinload + load_only to prevent cascades
+    player = (Player.query
+              .options(
+                  # Load only core player bio fields
+                  load_only(
+                      Player.player_id,
+                      Player.first_name,
+                      Player.last_name,
+                      Player.nick_name,
+                      Player.date_of_birth,
+                      Player.height,
+                      Player.weight,
+                      Player.bats,
+                      Player.throws,
+                      Player.city_of_birth_id,
+                      Player.nation_id,
+                      Player.second_nation_id
+                  ),
+                  # Load city with state and nation for birthplace_display
+                  selectinload(Player.city_of_birth).load_only(
+                      City.city_id,
+                      City.name,
+                      City.state_id,
+                      City.nation_id
+                  ).selectinload(City.state).load_only(
+                      State.state_id,
+                      State.nation_id,
+                      State.abbreviation
+                  ).selectinload(State.nation).load_only(
+                      Nation.nation_id,
+                      Nation.abbreviation
+                  ).raiseload('*'),
+                  # Load nation name only (no cascades)
+                  selectinload(Player.nation).load_only(
+                      Nation.nation_id,
+                      Nation.name,
+                      Nation.abbreviation
+                  ).raiseload('*'),
+                  # Load second nation if exists
+                  selectinload(Player.second_nation).load_only(
+                      Nation.nation_id,
+                      Nation.name,
+                      Nation.abbreviation
+                  ).raiseload('*'),
+                  # Load current status with minimal team info
+                  selectinload(Player.current_status).load_only(
+                      PlayerCurrentStatus.player_id,
+                      PlayerCurrentStatus.team_id,
+                      PlayerCurrentStatus.position,
+                      PlayerCurrentStatus.retired
+                  ).selectinload(PlayerCurrentStatus.team).load_only(
+                      Team.team_id,
+                      Team.name,
+                      Team.abbr
+                  ).raiseload('*'),
+                  # Override lazy='joined' on ratings - use lazyload instead
+                  # This prevents them from being loaded in the main query
+                  lazyload(Player.batting_ratings),
+                  lazyload(Player.pitching_ratings),
+                  lazyload(Player.fielding_ratings),
+                  # Block ALL other relationships
+                  raiseload('*')
+              )
+              .filter_by(player_id=player_id)
+              .first_or_404())
 
-    # Wrap service calls with Flask context propagation
-    @copy_current_request_context
-    def get_batting_major():
-        return player_service.get_player_career_batting_stats(player_id, 1)
+    # Get batting stats with career totals from service layer (split by league level)
+    # OPTIMIZATION: These service calls are already optimized with raw SQL
+    # Each call executes 2 SQL queries (yearly stats + career totals aggregation)
+    # Total: 4 calls * 2 queries = 8 SQL queries for stats
+    # Note: We only fetch Major and Minor league stats separately (not "ALL LEVELS")
+    # This reduces query load by 33% while still providing complete data
+    batting_data_major_raw = player_service.get_player_career_batting_stats(player_id, league_level_filter=1)
+    batting_data_minor_raw = player_service.get_player_career_batting_stats(player_id, league_level_filter=2)
 
-    @copy_current_request_context
-    def get_batting_minor():
-        return player_service.get_player_career_batting_stats(player_id, 2)
+    # Get pitching stats with career totals from service layer (split by league level)
+    pitching_data_major_raw = player_service.get_player_career_pitching_stats(player_id, league_level_filter=1)
+    pitching_data_minor_raw = player_service.get_player_career_pitching_stats(player_id, league_level_filter=2)
 
-    @copy_current_request_context
-    def get_pitching_major():
-        return player_service.get_player_career_pitching_stats(player_id, 1)
+    # Get trade history
+    trade_history_raw = player_service.get_player_trade_history(player_id)
 
-    @copy_current_request_context
-    def get_pitching_minor():
-        return player_service.get_player_career_pitching_stats(player_id, 2)
-
-    @copy_current_request_context
-    def get_trade_history():
-        return player_service.get_player_trade_history(player_id)
-
-    @copy_current_request_context
-    def get_player_news():
-        return player_service.get_player_news(player_id)
-
-    # Execute all queries in parallel using ThreadPoolExecutor
-    # OPTIMIZATION: Runs 7 independent queries concurrently instead of sequentially
-    # Expected: 60s sequential → 10-15s parallel (if queries are I/O bound)
-    with ThreadPoolExecutor(max_workers=7) as executor:
-        futures = {
-            'player': executor.submit(get_player_bio),
-            'batting_major': executor.submit(get_batting_major),
-            'batting_minor': executor.submit(get_batting_minor),
-            'pitching_major': executor.submit(get_pitching_major),
-            'pitching_minor': executor.submit(get_pitching_minor),
-            'trade_history': executor.submit(get_trade_history),
-            'player_news': executor.submit(get_player_news)
-        }
-
-        # Collect results (blocks until all futures complete)
-        results = {key: future.result() for key, future in futures.items()}
-
-    # Extract results from parallel execution
-    player = results['player']
-    batting_data_major_raw = results['batting_major']
-    batting_data_minor_raw = results['batting_minor']
-    pitching_data_major_raw = results['pitching_major']
-    pitching_data_minor_raw = results['pitching_minor']
-    trade_history_raw = results['trade_history']
-    player_news_raw = results['player_news']
+    # Get player news (contracts, injuries, awards, highlights, career milestones)
+    player_news_raw = player_service.get_player_news(player_id)
 
     # Convert dicts to objects for template compatibility
     batting_data_major = {
