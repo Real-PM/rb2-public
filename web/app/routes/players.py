@@ -11,9 +11,24 @@ bp = Blueprint('players', __name__)
 
 
 class DictToObject:
-    """Convert dict to object with attribute access for template compatibility"""
+    """Convert dict to object with attribute access for template compatibility
+
+    Handles key name aliasing for template compatibility:
+    - 'avg' -> 'batting_average'
+    - 'obp' -> 'on_base_percentage'
+    - 'slg' -> 'slugging_percentage'
+    """
     def __init__(self, d):
         self.__dict__.update(d)
+        # Add aliases for short key names (from yearly stats) to match template expectations
+        if 'avg' in d and 'batting_average' not in d:
+            self.batting_average = d['avg']
+        if 'obp' in d and 'on_base_percentage' not in d:
+            self.on_base_percentage = d['obp']
+        if 'slg' in d and 'slugging_percentage' not in d:
+            self.slugging_percentage = d['slg']
+        if 'ops' in d and 'ops' not in self.__dict__:
+            self.ops = d['ops']
 
 
 def _convert_dict_list_to_objects(dict_list):
