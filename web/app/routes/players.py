@@ -113,13 +113,19 @@ def players_by_letter(letter):
 
 
 @bp.route('/<int:player_id>')
-@cache.cached(timeout=600, key_prefix=_make_player_detail_cache_key)
 def player_detail(player_id):
     """Player detail page - bio, stats, ratings
 
     OPTIMIZATION: Use load_only to minimize data fetching and prevent
     cascading eager loads. Only load columns we actually use in the template.
+    Manual caching implemented due to Flask-Caching decorator issues.
     """
+    # Manual cache check
+    cache_key = f'player_detail:{player_id}'
+    cached_html = cache.get(cache_key)
+    if cached_html is not None:
+        return cached_html
+
     from sqlalchemy.orm import load_only, selectinload, raiseload, lazyload
     from app.models import PlayerCurrentStatus, City, State, Nation, Team
     from app.models import PlayerBattingRatings, PlayerPitchingRatings, PlayerFieldingRatings
@@ -210,7 +216,7 @@ def player_detail(player_id):
     # Get player news (contracts, injuries, awards, highlights, career milestones)
     player_news = player_service.get_player_news(player_id)
 
-    return render_template('players/detail.html',
+    rendered_html = render_template('players/detail.html',
                           player=player,
                           batting_data_major=batting_data_major,
                           batting_data_minor=batting_data_minor,
@@ -218,6 +224,11 @@ def player_detail(player_id):
                           pitching_data_minor=pitching_data_minor,
                           trade_history=trade_history,
                           player_news=player_news)
+
+    # Cache the rendered HTML for 10 minutes
+    cache.set(cache_key, rendered_html, timeout=600)
+
+    return rendered_html
 
 
 @bp.route('/image/<int:player_id>')
