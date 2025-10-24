@@ -108,7 +108,7 @@ def players_by_letter(letter):
 
 
 @bp.route('/<int:player_id>')
-@cache.cached(timeout=600)
+@cache.cached(timeout=600, key_prefix=lambda: f'player_detail_{request.view_args.get("player_id")}')
 def player_detail(player_id):
     """Player detail page - bio, stats, ratings
 
