@@ -126,10 +126,10 @@ def get_player_career_batting_stats(player_id, league_level_filter=None):
             'sh': stat.sh,
             'sf': stat.sf,
             'gdp': stat.gdp,
-            # Rate stats
-            'avg': stat.avg,
-            'obp': stat.obp,
-            'slg': stat.slg,
+            # Rate stats (database column names)
+            'avg': stat.batting_average,
+            'obp': stat.on_base_percentage,
+            'slg': stat.slugging_percentage,
             'ops': stat.ops,
             # Advanced stats
             'iso': stat.iso,
