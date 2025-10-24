@@ -265,6 +265,19 @@ class ReferenceLoader(BaseLoader):
                 'draft_team_1_4': 'draft_team_1_4',
                 'cash_1': 'cash_1',
                 'iafa_cap_1': 'iafa_cap_1'
+            },
+            'calculated_fields': {
+                # Populate array from all player_id columns for fast GIN-indexed lookups
+                'all_player_ids': '''(
+                    SELECT array_agg(DISTINCT pid)
+                    FROM unnest(ARRAY[
+                        player_id_0_0, player_id_0_1, player_id_0_2, player_id_0_3, player_id_0_4,
+                        player_id_0_5, player_id_0_6, player_id_0_7, player_id_0_8, player_id_0_9,
+                        player_id_1_0, player_id_1_1, player_id_1_2, player_id_1_3, player_id_1_4,
+                        player_id_1_5, player_id_1_6, player_id_1_7, player_id_1_8, player_id_1_9
+                    ]) AS pid
+                    WHERE pid IS NOT NULL
+                )'''
             }
         },
         'messages.csv': {
@@ -276,7 +289,16 @@ class ReferenceLoader(BaseLoader):
             'calculated_fields': {
                 # Convert 0 and negative values to NULL (non-trade messages use 0, -1, -5, etc.)
                 # Note: trade_id contains OOTP internal IDs with no FK constraint - kept for reference only
-                'trade_id': 'CASE WHEN trade_id > 0 THEN trade_id ELSE NULL END'
+                'trade_id': 'CASE WHEN trade_id > 0 THEN trade_id ELSE NULL END',
+                # Populate array from all player_id columns for fast GIN-indexed lookups
+                'all_player_ids': '''(
+                    SELECT array_agg(DISTINCT pid)
+                    FROM unnest(ARRAY[
+                        player_id_0, player_id_1, player_id_2, player_id_3, player_id_4,
+                        player_id_5, player_id_6, player_id_7, player_id_8, player_id_9
+                    ]) AS pid
+                    WHERE pid IS NOT NULL
+                )'''
             }
         },
         # Coaches and rosters (loaded manually after players in load-stats command)

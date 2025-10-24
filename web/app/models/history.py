@@ -1,5 +1,6 @@
 """Player history models - trades, transactions, awards, etc."""
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.dialects.postgresql import ARRAY
 from ..extensions import db
 from ..models.base import BaseModel
 
@@ -87,6 +88,9 @@ class TradeHistory(BaseModel):
     # Team 1 Cash/Cap
     cash_1 = db.Column(db.Integer)
     iafa_cap_1 = db.Column(db.Integer)
+
+    # Optimized array column for player lookups (replaces 20-way OR filter)
+    all_player_ids = db.Column(ARRAY(db.Integer))
 
     # ===== RELATIONSHIPS =====
 

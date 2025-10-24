@@ -1,5 +1,6 @@
 """News message models - player news, awards, injuries, contracts, highlights."""
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.dialects.postgresql import ARRAY
 from ..extensions import db
 from ..models.base import BaseModel
 
@@ -59,6 +60,9 @@ class Message(BaseModel):
     # Leagues (up to 2)
     league_id_0 = db.Column(db.Integer)
     league_id_1 = db.Column(db.Integer)
+
+    # Optimized array column for player lookups (replaces 10-way OR filter)
+    all_player_ids = db.Column(ARRAY(db.Integer))
 
     # Metadata
     importance = db.Column(db.SmallInteger)

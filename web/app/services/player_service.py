@@ -576,6 +576,9 @@ def get_player_trade_history(player_id):
 
     Returns trades in chronological order (oldest to newest).
 
+    OPTIMIZATION: Uses PostgreSQL array containment with GIN index
+    instead of 20-way OR filter for much faster queries.
+
     Args:
         player_id: Player ID (int)
 
@@ -586,7 +589,8 @@ def get_player_trade_history(player_id):
     # which causes cascading loads. Use lazyload to prevent this.
     from sqlalchemy.orm import lazyload, raiseload
 
-    # Query for trades where player appears in any of the 20 player slots
+    # Query using optimized array containment (GIN indexed)
+    # This replaces the previous 20-way OR filter
     trades = (
         TradeHistory.query
         .options(
@@ -594,30 +598,7 @@ def get_player_trade_history(player_id):
             lazyload(TradeHistory.team_1),  # Don't load team (causes cascade)
             raiseload('*')  # Block all other relationships
         )
-        .filter(
-            db.or_(
-                TradeHistory.player_id_0_0 == player_id,
-                TradeHistory.player_id_0_1 == player_id,
-                TradeHistory.player_id_0_2 == player_id,
-                TradeHistory.player_id_0_3 == player_id,
-                TradeHistory.player_id_0_4 == player_id,
-                TradeHistory.player_id_0_5 == player_id,
-                TradeHistory.player_id_0_6 == player_id,
-                TradeHistory.player_id_0_7 == player_id,
-                TradeHistory.player_id_0_8 == player_id,
-                TradeHistory.player_id_0_9 == player_id,
-                TradeHistory.player_id_1_0 == player_id,
-                TradeHistory.player_id_1_1 == player_id,
-                TradeHistory.player_id_1_2 == player_id,
-                TradeHistory.player_id_1_3 == player_id,
-                TradeHistory.player_id_1_4 == player_id,
-                TradeHistory.player_id_1_5 == player_id,
-                TradeHistory.player_id_1_6 == player_id,
-                TradeHistory.player_id_1_7 == player_id,
-                TradeHistory.player_id_1_8 == player_id,
-                TradeHistory.player_id_1_9 == player_id
-            )
-        )
+        .filter(TradeHistory.all_player_ids.contains([player_id]))
         .order_by(TradeHistory.date.asc())
         .all()
     )
@@ -651,26 +632,16 @@ def get_player_news(player_id, limit=None):
     # Relevant message types for player pages
     RELEVANT_TYPES = [2, 3, 4, 7, 8]
 
+    # OPTIMIZATION: Use PostgreSQL array containment with GIN index
+    # This replaces the previous 10-way OR filter
     query = (
         Message.query
         .filter(
             and_(
                 Message.deleted == 0,  # Exclude deleted messages
-                Message.message_type.in_(RELEVANT_TYPES)  # Only relevant types
+                Message.message_type.in_(RELEVANT_TYPES),  # Only relevant types
+                Message.all_player_ids.contains([player_id])  # Array containment (GIN indexed)
             )
-        )
-        .filter(
-            # Check if player appears in any of the 10 player slots
-            (Message.player_id_0 == player_id) |
-            (Message.player_id_1 == player_id) |
-            (Message.player_id_2 == player_id) |
-            (Message.player_id_3 == player_id) |
-            (Message.player_id_4 == player_id) |
-            (Message.player_id_5 == player_id) |
-            (Message.player_id_6 == player_id) |
-            (Message.player_id_7 == player_id) |
-            (Message.player_id_8 == player_id) |
-            (Message.player_id_9 == player_id)
         )
         .order_by(Message.date.desc())  # Most recent first
     )
