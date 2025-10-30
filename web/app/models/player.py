@@ -116,27 +116,30 @@ class Player(BaseModel, TimestampMixin, CacheableMixin):
     )
 
     # One-to-One: Player -> BattingRatings
+    # NOTE: Tables are empty (not populated by ETL), so we use lazy='noload' to prevent queries
     batting_ratings = db.relationship(
         'PlayerBattingRatings',
         uselist=False,
         back_populates='player',
-        lazy='joined'
+        lazy='noload'
     )
 
     # One-to-One: Player -> PitchingRatings
+    # NOTE: Tables are empty (not populated by ETL), so we use lazy='noload' to prevent queries
     pitching_ratings = db.relationship(
         'PlayerPitchingRatings',
         uselist=False,
         back_populates='player',
-        lazy='joined'
+        lazy='noload'
     )
 
     # One-to-One: Player -> FieldingRatings
+    # NOTE: Tables are empty (not populated by ETL), so we use lazy='noload' to prevent queries
     fielding_ratings = db.relationship(
         'PlayerFieldingRatings',
         uselist=False,
         back_populates='player',
-        lazy='joined'
+        lazy='noload'
     )
 
     # ===== HYBRID PROPERTIES =====
