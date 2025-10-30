@@ -143,7 +143,7 @@ def get_player_career_batting_stats(player_id, league_level_filter=None):
         # No batting stats
         return {'yearly_stats': yearly_stats_dicts, 'career_totals': None}
 
-    # Convert to dict
+    # Convert to dict - use index access for 't' to avoid Row attribute conflict
     career_totals = {
         'g': totals_result.g or 0,
         'pa': totals_result.pa or 0,
@@ -151,7 +151,7 @@ def get_player_career_batting_stats(player_id, league_level_filter=None):
         'r': totals_result.r or 0,
         'h': totals_result.h or 0,
         'd': totals_result.d or 0,
-        't': totals_result.t or 0,
+        't': totals_result[6] or 0,  # Index 6 = 't' column (Row.t conflicts with tuple method)
         'hr': totals_result.hr or 0,
         'rbi': totals_result.rbi or 0,
         'sb': totals_result.sb or 0,
