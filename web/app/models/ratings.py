@@ -72,12 +72,9 @@ class PlayerBattingRatings(BaseModel, CacheableMixin):
 
     # ===== RELATIONSHIPS =====
 
-    # One-to-One: BattingRatings -> Player
-    player = db.relationship(
-        'Player',
-        back_populates='batting_ratings',
-        lazy='joined'
-    )
+    # REMOVED: Relationship back to Player model
+    # The Player.batting_ratings relationship was removed because this table is empty
+    # and was causing massive query overhead. If needed, query this table directly.
 
     # ===== HYBRID PROPERTIES =====
 
@@ -202,12 +199,9 @@ class PlayerPitchingRatings(BaseModel, CacheableMixin):
 
     # ===== RELATIONSHIPS =====
 
-    # One-to-One: PitchingRatings -> Player
-    player = db.relationship(
-        'Player',
-        back_populates='pitching_ratings',
-        lazy='joined'
-    )
+    # REMOVED: Relationship back to Player model
+    # The Player.pitching_ratings relationship was removed because this table is empty
+    # and was causing massive query overhead. If needed, query this table directly.
 
     # ===== HELPER METHODS =====
 
@@ -328,12 +322,9 @@ class PlayerFieldingRatings(BaseModel, CacheableMixin):
 
     # ===== RELATIONSHIPS =====
 
-    # One-to-One: FieldingRatings -> Player
-    player = db.relationship(
-        'Player',
-        back_populates='fielding_ratings',
-        lazy='joined'
-    )
+    # REMOVED: Relationship back to Player model
+    # The Player.fielding_ratings relationship was removed because this table is empty
+    # and was causing massive query overhead. If needed, query this table directly.
 
     # ===== HELPER METHODS =====
 
