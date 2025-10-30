@@ -101,7 +101,8 @@
     </div>
 
     <!-- Ratings Section -->
-    {% if player.batting_ratings or player.pitching_ratings or player.fielding_ratings %}
+    {# NOTE: Ratings tables are empty (not populated by ETL), so skip this section entirely #}
+    {% if false %}
         <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
             <h2 class="text-2xl font-bold text-gray-900 mb-6">Current Ratings</h2>
 
