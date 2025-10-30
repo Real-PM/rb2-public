@@ -160,12 +160,11 @@ def player_detail(player_id):
     if cached_data is not None:
         return cached_data
 
-    from sqlalchemy.orm import load_only, selectinload, raiseload, lazyload
+    from sqlalchemy.orm import load_only, selectinload, raiseload
     from app.models import PlayerCurrentStatus, City, State, Nation, Team
-    from app.models import PlayerBattingRatings, PlayerPitchingRatings, PlayerFieldingRatings
 
     # Query with strict column and relationship control
-    # CRITICAL: Override model's lazy='joined' with selectinload + load_only to prevent cascades
+    # CRITICAL: Use selectinload + load_only to prevent cascading joins
     player = (Player.query
               .options(
                   # Load only core player bio fields
@@ -220,11 +219,6 @@ def player_detail(player_id):
                       Team.name,
                       Team.abbr
                   ).raiseload('*'),
-                  # Override lazy='joined' on ratings - use lazyload instead
-                  # This prevents them from being loaded in the main query
-                  lazyload(Player.batting_ratings),
-                  lazyload(Player.pitching_ratings),
-                  lazyload(Player.fielding_ratings),
                   # Block ALL other relationships
                   raiseload('*')
               )

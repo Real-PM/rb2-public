@@ -115,32 +115,11 @@ class Player(BaseModel, TimestampMixin, CacheableMixin):
         lazy='dynamic'
     )
 
-    # One-to-One: Player -> BattingRatings
-    # NOTE: Tables are empty (not populated by ETL), so we use lazy='noload' to prevent queries
-    batting_ratings = db.relationship(
-        'PlayerBattingRatings',
-        uselist=False,
-        back_populates='player',
-        lazy='noload'
-    )
-
-    # One-to-One: Player -> PitchingRatings
-    # NOTE: Tables are empty (not populated by ETL), so we use lazy='noload' to prevent queries
-    pitching_ratings = db.relationship(
-        'PlayerPitchingRatings',
-        uselist=False,
-        back_populates='player',
-        lazy='noload'
-    )
-
-    # One-to-One: Player -> FieldingRatings
-    # NOTE: Tables are empty (not populated by ETL), so we use lazy='noload' to prevent queries
-    fielding_ratings = db.relationship(
-        'PlayerFieldingRatings',
-        uselist=False,
-        back_populates='player',
-        lazy='noload'
-    )
+    # REMOVED: Rating relationships (batting_ratings, pitching_ratings, fielding_ratings)
+    # These tables (players_batting, players_pitching, players_fielding) are empty (not populated by ETL)
+    # and were causing massive queries with 100+ columns each. Relationships have been completely
+    # removed to prevent any accidental lazy loading. If ratings are needed in the future, they
+    # should be loaded explicitly via raw SQL queries, not ORM relationships.
 
     # ===== HYBRID PROPERTIES =====
     # These work in both Python and SQL queries
