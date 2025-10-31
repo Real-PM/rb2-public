@@ -44,12 +44,16 @@ class Config:
     # Debug Mode
     DEBUG = False
 
+    # Profiling
+    ENABLE_PROFILING = False
+
 
 class DevelopmentConfig(Config):
     """Development specific configuration - Local Redis on dev machine"""
     DEBUG = True
     SQLALCHEMY_ECHO = True # Log all SQL queries
     TEMPLATES_AUTO_RELOAD = True
+    ENABLE_PROFILING = True  # Enable detailed profiling in dev
 
     # Redis caching (local instance on dev machine)
     CACHE_TYPE = 'RedisCache'
@@ -62,6 +66,7 @@ class StagingConfig(Config):
     """Staging environment - Centralized Redis on DB server"""
     DEBUG = False
     SQLALCHEMY_ECHO = True  # TEMPORARY: Enable to find slow queries
+    ENABLE_PROFILING = True  # Enable for performance analysis
 
     # Redis caching (centralized on DB server, separate DB namespace)
     CACHE_TYPE = 'RedisCache'

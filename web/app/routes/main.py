@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, send_from_directory, abort
 from app.models import Team, TeamRecord, League, SubLeague, Division
 from app.services.player_service import get_notable_rookies, get_featured_players, get_players_born_this_week
 from app.extensions import cache
+from app.utils.profiling import profile_route, timing_context
 from sqlalchemy import and_
 import os
 
@@ -11,6 +12,7 @@ bp = Blueprint('main', __name__)
 
 @bp.route('/')
 @cache.cached(timeout=300, key_prefix='home_standings')
+@profile_route('home_page')
 def index():
     """Home page - Show current standings for all top-level leagues
 
@@ -26,33 +28,35 @@ def index():
     """
 
     # Get all top-level leagues (league_level = 1)
-    top_leagues = League.query.filter_by(league_level=1).order_by(League.name).all()
+    with timing_context('query_top_leagues'):
+        top_leagues = League.query.filter_by(league_level=1).order_by(League.name).all()
 
     if not top_leagues:
         return render_template('index.html', leagues_data=None)
 
     leagues_data = []
 
-    for league in top_leagues:
-        # Get teams in this league via team_relations
-        # Use raw SQL to handle flexible structure
-        from sqlalchemy import text
-        from app.extensions import db as database
+    with timing_context('build_standings_data'):
+        for league in top_leagues:
+            # Get teams in this league via team_relations
+            # Use raw SQL to handle flexible structure
+            from sqlalchemy import text
+            from app.extensions import db as database
 
-        query = text("""
-            SELECT DISTINCT
-                t.team_id,
-                tr.sub_league_id,
-                tr.division_id,
-                t.name
-            FROM teams t
-            JOIN team_relations tr ON t.team_id = tr.team_id
-            WHERE tr.league_id = :league_id
-            ORDER BY tr.sub_league_id, tr.division_id, t.name
-        """)
+            query = text("""
+                SELECT DISTINCT
+                    t.team_id,
+                    tr.sub_league_id,
+                    tr.division_id,
+                    t.name
+                FROM teams t
+                JOIN team_relations tr ON t.team_id = tr.team_id
+                WHERE tr.league_id = :league_id
+                ORDER BY tr.sub_league_id, tr.division_id, t.name
+            """)
 
-        result = database.session.execute(query, {'league_id': league.league_id})
-        team_relations = result.fetchall()
+            result = database.session.execute(query, {'league_id': league.league_id})
+            team_relations = result.fetchall()
 
         # Group by sub_league_id and division_id
         structure = {}
@@ -123,23 +127,29 @@ def index():
 
             standings_data.append(sub_league_data)
 
-        league_data = {
-            'league': league,
-            'standings': standings_data
-        }
+            league_data = {
+                'league': league,
+                'standings': standings_data
+            }
 
-        leagues_data.append(league_data)
+            leagues_data.append(league_data)
 
     # Get featured players, notable rookies, and birthdays for left column
-    featured_players = get_featured_players(limit=18)
-    rookies = get_notable_rookies(limit=10)
-    birthdays = get_players_born_this_week(days_range=7)
+    with timing_context('query_featured_players'):
+        featured_players = get_featured_players(limit=18)
 
-    return render_template('index.html',
-                          leagues_data=leagues_data,
-                          featured_players=featured_players,
-                          rookies=rookies,
-                          birthdays=birthdays)
+    with timing_context('query_notable_rookies'):
+        rookies = get_notable_rookies(limit=10)
+
+    with timing_context('query_birthdays'):
+        birthdays = get_players_born_this_week(days_range=7)
+
+    with timing_context('render_template'):
+        return render_template('index.html',
+                              leagues_data=leagues_data,
+                              featured_players=featured_players,
+                              rookies=rookies,
+                              birthdays=birthdays)
 
 
 @bp.route('/health')
