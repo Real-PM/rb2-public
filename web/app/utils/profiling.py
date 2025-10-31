@@ -57,6 +57,10 @@ class RouteProfiler:
         stats.sort_stats('cumulative')
         stats.print_stats(30)  # Top 30 functions
 
+        # Debug: Log if timings is empty for slow requests
+        if total_time > 1.0 and not self.timings:
+            logger.warning(f"Profiler for '{self.route_name}' took {total_time*1000:.2f}ms but has NO timings recorded!")
+
         return {
             'route_name': self.route_name,
             'total_time_ms': round(total_time * 1000, 2),
@@ -67,6 +71,9 @@ class RouteProfiler:
     def add_timing(self, label: str, duration: float):
         """Add a timing measurement."""
         self.timings[label] = duration
+        # Debug: Log successful timing additions for slow operations
+        if duration > 0.1:  # Log if >100ms
+            logger.debug(f"Timing added to '{self.route_name}': {label} = {duration*1000:.2f}ms")
 
 
 @contextmanager
