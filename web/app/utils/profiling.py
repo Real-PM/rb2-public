@@ -89,6 +89,9 @@ def timing_context(label: str):
         # Store timing in Flask's g object if profiler is active
         if hasattr(g, 'profiler') and g.profiler:
             g.profiler.add_timing(label, duration)
+        else:
+            # Log when profiler is not available (debugging)
+            logger.warning(f"Profiler not available for timing_context '{label}' (duration: {duration*1000:.2f}ms)")
 
 
 def profile_route(route_name: str):
