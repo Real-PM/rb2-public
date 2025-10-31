@@ -47,7 +47,7 @@ TEST_ROUTES = [
     },
     {
         'name': 'Team Year',
-        'url': '/teams/1/1997',  # Sample team ID and year
+        'url': '/teams/1/1945',  # Sample team ID and year (1945 = latest year with data)
         'cache_clear_pattern': None
     },
     {

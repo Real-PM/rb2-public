@@ -99,7 +99,7 @@ def team_detail(team_id):
         franchise_year_by_year = get_franchise_year_by_year(team_id)
 
     # Current game year for linking to current season
-    CURRENT_YEAR = 1997
+    CURRENT_YEAR = 1945  # Latest year with data in the database
 
     with timing_context('render_template'):
         return render_template('teams/detail.html',
