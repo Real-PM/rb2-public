@@ -159,7 +159,9 @@ def _log_profile_results(results: Dict[str, Any]):
 
     # Log detailed profile stats
     logger.info("Top Functions (by cumulative time):")
-    logger.info(results['profile_output'])
+    # Log each line of cProfile output separately to ensure proper formatting
+    for line in results['profile_output'].splitlines():
+        logger.info(line)
     logger.info("=" * 80)
 
 
