@@ -61,18 +61,33 @@ TEST_ROUTES = [
 def clear_redis_cache(env='development'):
     """Clear Redis cache for the environment."""
     redis_db = {'development': 0, 'staging': 1, 'production': 2}.get(env, 0)
-    redis_host = 'localhost' if env == 'development' else '192.168.10.94'
 
     try:
-        subprocess.run(
-            ['redis-cli', '-h', redis_host, '-n', str(redis_db), 'FLUSHDB'],
-            capture_output=True,
-            check=True
-        )
-        print(f"✓ Cleared Redis cache (DB {redis_db})")
-        return True
+        # Try docker exec first (for staging/production with containerized Redis)
+        try:
+            subprocess.run(
+                ['docker', 'exec', 'redis-rb2', 'redis-cli', '-n', str(redis_db), 'FLUSHDB'],
+                capture_output=True,
+                check=True
+            )
+            print(f"✓ Cleared Redis cache via Docker (DB {redis_db})")
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # Fallback to direct redis-cli (for development)
+            redis_host = 'localhost' if env == 'development' else '192.168.10.94'
+            subprocess.run(
+                ['redis-cli', '-h', redis_host, '-n', str(redis_db), 'FLUSHDB'],
+                capture_output=True,
+                check=True
+            )
+            print(f"✓ Cleared Redis cache (DB {redis_db})")
+            return True
     except subprocess.CalledProcessError as e:
         print(f"✗ Failed to clear Redis cache: {e}")
+        return False
+    except FileNotFoundError:
+        print(f"⚠ Could not find redis-cli or docker, skipping cache clear")
+        print(f"  To manually clear cache: docker exec redis-rb2 redis-cli -n {redis_db} FLUSHDB")
         return False
 
 

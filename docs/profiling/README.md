@@ -1,3 +1,4 @@
+
 # Performance Profiling Guide
 
 This guide explains how to use the comprehensive profiling system to identify performance bottlenecks in the RB2 application.
