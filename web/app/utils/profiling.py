@@ -26,9 +26,7 @@ import functools
 from contextlib import contextmanager
 from flask import g, current_app
 from typing import Optional, Dict, Any
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class RouteProfiler:
